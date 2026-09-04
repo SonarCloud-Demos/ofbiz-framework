@@ -39,6 +39,14 @@ plugins {
     id "com.github.ManifestClasspath" version "latest.release"
     id "com.github.jakemarsden.git-hooks" version "latest.release"
     id "com.github.node-gradle.node" version "latest.release" apply false
+    id "org.sonarqube" version "7.3.1.8318"
+}
+
+sonar {
+    properties {
+        property "sonar.projectKey", "e-corp-demo_ofbiz-framework"
+        property "sonar.organization", "e-corp-demo"
+    }
 }
 
 /* OWASP plugin

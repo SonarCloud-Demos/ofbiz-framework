@@ -58,5 +58,7 @@ task cleanDocAssets(type: Delete, group: 'Cleaning',
     }
 }
 
-project.rootProject.tasks.getByName('classes').dependsOn prepareDocAssets
+if (!project.rootProject.hasProperty('skipNpmInstall')) {
+    project.rootProject.tasks.getByName('classes').dependsOn prepareDocAssets
+}
 project.rootProject.tasks.clean.dependsOn cleanDocAssets

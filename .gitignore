@@ -40,3 +40,4 @@ desktop.ini
 *.patch
 node_modules/
 /docs/asciidoc/images/
+docker/examples/postgres-demo/logs/
