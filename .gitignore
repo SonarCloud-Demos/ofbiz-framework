@@ -41,3 +41,4 @@ desktop.ini
 node_modules/
 /docs/asciidoc/images/
 docker/examples/postgres-demo/logs/
+local-dev/logs/
