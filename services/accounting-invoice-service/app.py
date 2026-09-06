@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import time
 from decimal import Decimal
 from html import escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -91,6 +92,72 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(404, {"error": "not_found", "path": parsed.path})
         except psycopg.Error as exc:
             self.respond(503, {"error": "legacy_db_unavailable", "detail": exc.__class__.__name__})
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path.rstrip("/") != "/api/accounting/invoices":
+            self.respond(404, {"error": "not_found", "path": parsed.path})
+            return
+        try:
+            self.respond(201, self.create_invoice(self.read_json_body()))
+        except ValueError as exc:
+            self.respond(400, {"error": "invalid_request", "detail": str(exc)})
+        except psycopg.errors.UniqueViolation:
+            self.respond(409, {"error": "invoice_already_exists"})
+        except psycopg.Error as exc:
+            self.respond(503, {"error": "legacy_db_unavailable", "detail": exc.__class__.__name__})
+
+    def do_PUT(self):
+        invoice_id = self.invoice_id_from_path()
+        if invoice_id is None:
+            self.respond(404, {"error": "not_found", "path": urlparse(self.path).path})
+            return
+        try:
+            invoice = self.update_invoice(invoice_id, self.read_json_body())
+            if invoice is None:
+                self.respond(404, {"error": "invoice_not_found", "invoiceId": invoice_id})
+                return
+            self.respond(200, invoice)
+        except ValueError as exc:
+            self.respond(400, {"error": "invalid_request", "detail": str(exc)})
+        except psycopg.Error as exc:
+            self.respond(503, {"error": "legacy_db_unavailable", "detail": exc.__class__.__name__})
+
+    def do_DELETE(self):
+        invoice_id = self.invoice_id_from_path()
+        if invoice_id is None:
+            self.respond(404, {"error": "not_found", "path": urlparse(self.path).path})
+            return
+        try:
+            deleted = self.delete_invoice(invoice_id)
+            if deleted is None:
+                self.respond(404, {"error": "invoice_not_found", "invoiceId": invoice_id})
+                return
+            if not deleted:
+                self.respond(409, {"error": "invoice_has_dependencies", "invoiceId": invoice_id})
+                return
+            self.respond(200, {"deleted": True, "invoiceId": invoice_id})
+        except psycopg.Error as exc:
+            self.respond(503, {"error": "legacy_db_unavailable", "detail": exc.__class__.__name__})
+
+    def invoice_id_from_path(self):
+        path = urlparse(self.path).path.rstrip("/")
+        prefix = "/api/accounting/invoices/"
+        if not path.startswith(prefix):
+            return None
+        invoice_id = path[len(prefix):]
+        if not invoice_id or "/" in invoice_id or invoice_id == "health":
+            return None
+        return invoice_id
+
+    def read_json_body(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length == 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(length).decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError("body must be valid JSON") from exc
 
     def list_invoices(self, query):
         limit = parse_limit(query)
@@ -206,6 +273,28 @@ class Handler(BaseHTTPRequestHandler):
         status_value = escape(query.get("statusId", [""])[0])
         party_from_value = escape(query.get("partyIdFrom", [""])[0])
         party_value = escape(query.get("partyId", [""])[0])
+        global_nav = self.render_nav([
+            ("Webtools", "/webtools/control/main"),
+            ("Accounting", "/accounting/control/main"),
+            ("Order", "/ordermgr/control/main"),
+            ("Catalog", "/catalog/control/main"),
+            ("Party", "/partymgr/control/main"),
+        ])
+        accounting_nav = self.render_nav([
+            ("Invoices", "/accounting/control/findInvoices"),
+            ("Payments", "/accounting/control/findPayments"),
+            ("Payment Groups", "/accounting/control/FindPaymentGroup"),
+            ("Transactions", "/accounting/control/FindGatewayResponses"),
+            ("Gateway Config", "/accounting/control/FindPaymentGatewayConfig"),
+            ("Billing Accounts", "/accounting/control/FindBillingAccount"),
+            ("Financial Accounts", "/accounting/control/FinAccountMain"),
+            ("Tax Authorities", "/accounting/control/FindTaxAuthority"),
+            ("Agreements", "/accounting/control/FindAgreement"),
+            ("Fixed Assets", "/accounting/control/ListFixedAssets"),
+            ("Budgets", "/accounting/control/ListBudgets"),
+            ("GL Settings", "/accounting/control/globalGLSettings"),
+            ("Companies", "/accounting/control/ListCompanies"),
+        ], active="Invoices")
         return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -213,6 +302,9 @@ class Handler(BaseHTTPRequestHandler):
     <title>Modern Accounting Invoices</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 2rem; color: #172033; }}
+        nav {{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }}
+        nav a {{ background: #edf2f7; border-radius: 999px; color: #24364f; padding: 0.45rem 0.7rem; text-decoration: none; }}
+        nav a.active {{ background: #005eb8; color: white; }}
         .eyebrow {{ color: #586a84; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }}
         h1 {{ margin-bottom: 0.25rem; }}
         .note {{ background: #fff7df; border: 1px solid #f2d388; padding: 1rem; margin: 1.5rem 0; }}
@@ -230,6 +322,8 @@ class Handler(BaseHTTPRequestHandler):
     </style>
 </head>
 <body>
+    {global_nav}
+    {accounting_nav}
     <div class="eyebrow">Modern microservice slice</div>
     <h1>Accounting Invoices</h1>
     <p>Read-only invoice projection served by <code>modern-accounting-invoice-service</code>.</p>
@@ -265,6 +359,97 @@ class Handler(BaseHTTPRequestHandler):
     </table>
 </body>
 </html>"""
+
+    def render_nav(self, links, active=None):
+        rendered = []
+        for label, href in links:
+            klass = " class=\"active\"" if label == active else ""
+            rendered.append(f"<a{klass} href=\"{escape(href)}\">{escape(label)}</a>")
+        return "<nav>" + "".join(rendered) + "</nav>"
+
+    def create_invoice(self, payload):
+        required = ("invoiceTypeId", "partyIdFrom", "partyId")
+        missing = [field for field in required if not payload.get(field)]
+        if missing:
+            raise ValueError("missing required fields: " + ", ".join(missing))
+
+        invoice_id = payload.get("invoiceId") or self.next_invoice_id()
+        fields = {
+            "invoice_id": invoice_id,
+            "invoice_type_id": payload["invoiceTypeId"],
+            "party_id_from": payload["partyIdFrom"],
+            "party_id": payload["partyId"],
+            "status_id": payload.get("statusId", "INVOICE_IN_PROCESS"),
+            "currency_uom_id": payload.get("currencyUomId", "USD"),
+            "description": payload.get("description"),
+        }
+        with psycopg.connect(**db_config(), row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    insert into invoice (
+                        invoice_id, invoice_type_id, party_id_from, party_id, status_id,
+                        invoice_date, currency_uom_id, description,
+                        created_stamp, created_tx_stamp, last_updated_stamp, last_updated_tx_stamp
+                    ) values (
+                        %(invoice_id)s, %(invoice_type_id)s, %(party_id_from)s, %(party_id)s, %(status_id)s,
+                        current_timestamp, %(currency_uom_id)s, %(description)s,
+                        current_timestamp, current_timestamp, current_timestamp, current_timestamp
+                    )
+                    """,
+                    fields,
+                )
+        return self.get_invoice(invoice_id)
+
+    def update_invoice(self, invoice_id, payload):
+        allowed = {
+            "description": "description",
+            "statusId": "status_id",
+            "referenceNumber": "reference_number",
+            "currencyUomId": "currency_uom_id",
+        }
+        updates = [(json_field, column) for json_field, column in allowed.items() if json_field in payload]
+        if not updates:
+            raise ValueError("no updatable fields supplied")
+
+        assignments = [f"{column} = %({json_field})s" for json_field, column in updates]
+        assignments.append("last_updated_stamp = current_timestamp")
+        assignments.append("last_updated_tx_stamp = current_timestamp")
+        params = {json_field: payload[json_field] for json_field, _ in updates}
+        params["invoice_id"] = invoice_id
+
+        with psycopg.connect(**db_config(), row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"update invoice set {', '.join(assignments)} where invoice_id = %(invoice_id)s",
+                    params,
+                )
+                if cur.rowcount == 0:
+                    return None
+        return self.get_invoice(invoice_id)
+
+    def delete_invoice(self, invoice_id):
+        with psycopg.connect(**db_config(), row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute("select 1 from invoice where invoice_id = %(invoice_id)s", {"invoice_id": invoice_id})
+                if cur.fetchone() is None:
+                    return None
+                cur.execute(
+                    """
+                    select
+                        (select count(*) from invoice_item where invoice_id = %(invoice_id)s) +
+                        (select count(*) from payment_application where invoice_id = %(invoice_id)s) as dependency_count
+                    """,
+                    {"invoice_id": invoice_id},
+                )
+                if cur.fetchone()["dependency_count"]:
+                    return False
+                cur.execute("delete from invoice_status where invoice_id = %(invoice_id)s", {"invoice_id": invoice_id})
+                cur.execute("delete from invoice where invoice_id = %(invoice_id)s", {"invoice_id": invoice_id})
+        return True
+
+    def next_invoice_id(self):
+        return "MSVC" + str(int(time.time() * 1000))
 
     def get_invoice(self, invoice_id):
         header_sql = """

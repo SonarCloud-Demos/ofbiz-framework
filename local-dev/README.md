@@ -36,8 +36,10 @@ The direct legacy fallback must render same-origin asset and form URLs on `https
 - invoice item count and SQL-derived total
 - payment application total and outstanding amount
 - invoice detail with line items, payment applications, and status history
+- API create/update/delete operations for invoice headers
+- navigation links back to the remaining legacy Accounting sections
 
-This is intentionally read-only. OFBiz remains source of truth until invoice totals, rounding, tax lines, promotions, and payment application behavior are reconciled with OFBiz `InvoiceWorker` and service rules.
+This is intentionally limited to invoice headers for writes. OFBiz remains source of truth for invoice item mutation, payment application, posting, tax, promotion, PDF, and accounting side effects until behavior is reconciled with OFBiz `InvoiceWorker` and service rules.
 
 ## Login
 
