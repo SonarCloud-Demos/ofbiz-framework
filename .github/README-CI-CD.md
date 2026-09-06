@@ -7,8 +7,13 @@
   → Trigger: push / PR on `trunk` and `release*`
 
 - `build.yml`
-  SonarQube Cloud build and analysis
-  → Trigger: push / PR on `trunk` and `feat-*`
+  SonarQube Cloud pull request analysis
+  → Trigger: PR targeting `trunk` and `feat-*`
+  → Passes the PR number, source branch, and base branch explicitly so the PR baseline is the target branch, normally `trunk`.
+
+- `sonarqube-branch.yml`
+  SonarQube Cloud branch analysis
+  → Trigger: push on `trunk` and `feat-*`
 
 - `docker-image.yml`  
   Build and push images to `ghcr.io/apache/ofbiz`  
