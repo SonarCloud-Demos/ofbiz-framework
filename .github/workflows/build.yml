@@ -40,7 +40,17 @@ jobs:
         run: chmod +x gradlew gradle/init-gradle-wrapper.sh
       - name: Initialize Gradle wrapper
         run: ./gradle/init-gradle-wrapper.sh
-      - name: Build and analyze
+      - name: Build and analyze pull request
+        if: github.event_name == 'pull_request'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >
+          ./gradlew build sonar --info
+          -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
+          -Dsonar.pullrequest.branch=${{ github.head_ref }}
+          -Dsonar.pullrequest.base=${{ github.base_ref }}
+      - name: Build and analyze branch
+        if: github.event_name == 'push'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: ./gradlew build sonar --info
