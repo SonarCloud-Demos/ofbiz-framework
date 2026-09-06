@@ -51,18 +51,36 @@ services:
       PORT: "8080"
       SERVICE_NAME: modern-notification-service
 
+  modern-accounting-invoice-service:
+    build:
+      context: ../services/accounting-invoice-service
+    image: modern-accounting-invoice-service:local
+    container_name: modern-accounting-invoice-service
+    restart: "no"
+    depends_on:
+      legacy-ofbiz-db:
+        condition: service_healthy
+    env_file:
+      - ../docker/examples/postgres-demo/ofbiz-postgres.env
+    environment:
+      PORT: "8080"
+      SERVICE_NAME: modern-accounting-invoice-service
+      DB_HOST: legacy-ofbiz-db
+
   modern-gateway:
-    image: nginx:1.27-alpine
+    build:
+      context: ./gateway
+    image: modern-gateway:local
     container_name: modern-gateway
     restart: "no"
     depends_on:
       - legacy-ofbiz-app
       - modern-notification-service
+      - modern-accounting-invoice-service
     ports:
       - "18080:8080"
     command: >
-      sh -c "apk add --no-cache openssl >/dev/null
-      && openssl req -x509 -nodes -days 365 -newkey rsa:2048
+      sh -c "openssl req -x509 -nodes -days 365 -newkey rsa:2048
       -keyout /tmp/local-gateway.key -out /tmp/local-gateway.crt
       -subj '/CN=localhost' >/dev/null 2>&1
       && nginx -g 'daemon off;'"

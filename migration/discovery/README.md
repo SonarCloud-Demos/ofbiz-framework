@@ -2,6 +2,8 @@
 
 Generated discovery reports for the OFBiz-to-microservices migration.
 
+Phase 1 extraction target: Accounting > Invoices. The first modern slice is a read-only invoice projection over legacy OFBiz Postgres, exposed through `modern-accounting-invoice-service` at `/api/accounting/invoices` and `/modern/accounting/invoices`.
+
 Run:
 
 ```shell
