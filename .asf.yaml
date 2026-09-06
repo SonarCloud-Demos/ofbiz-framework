@@ -56,7 +56,7 @@ github:
       restrict_force_push: true
       required_linear_history: true
 
-  dependabot_alerts: true
+  dependabot_alerts: false
   dependabot_updates: false
 
 notifications:

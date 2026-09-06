@@ -6,6 +6,10 @@
   Build and checks (style, Javadoc)  
   → Trigger: push / PR on `trunk` and `release*`
 
+- `build.yml`
+  SonarQube Cloud build and analysis
+  → Trigger: push / PR on `trunk` and `feat-*`
+
 - `docker-image.yml`  
   Build and push images to `ghcr.io/apache/ofbiz`  
   → Trigger: push on `trunk` / `release*` + tags
