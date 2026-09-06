@@ -279,7 +279,7 @@ class Handler(BaseHTTPRequestHandler):
             ("Order", "/ordermgr/control/main"),
             ("Catalog", "/catalog/control/main"),
             ("Party", "/partymgr/control/main"),
-        ])
+        ], class_name="global-nav", active="Accounting")
         accounting_nav = self.render_nav([
             ("Invoices", "/accounting/control/findInvoices"),
             ("Payments", "/accounting/control/findPayments"),
@@ -294,78 +294,86 @@ class Handler(BaseHTTPRequestHandler):
             ("Budgets", "/accounting/control/ListBudgets"),
             ("GL Settings", "/accounting/control/globalGLSettings"),
             ("Companies", "/accounting/control/ListCompanies"),
-        ], active="Invoices")
+        ], class_name="section-nav", active="Invoices")
         return f"""<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <title>Modern Accounting Invoices</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 2rem; color: #172033; }}
-        nav {{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }}
-        nav a {{ background: #edf2f7; border-radius: 999px; color: #24364f; padding: 0.45rem 0.7rem; text-decoration: none; }}
-        nav a.active {{ background: #005eb8; color: white; }}
-        .eyebrow {{ color: #586a84; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }}
-        h1 {{ margin-bottom: 0.25rem; }}
-        .note {{ background: #fff7df; border: 1px solid #f2d388; padding: 1rem; margin: 1.5rem 0; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ border-bottom: 1px solid #d8dee8; padding: 0.7rem; text-align: left; }}
-        th {{ background: #edf2f7; }}
+        body {{ background: #f2f3f7; color: #181c32; font-family: Arial, sans-serif; margin: 0; }}
+        .top-bar {{ align-items: center; background: #1BC5BD; box-shadow: 0 2px 8px rgba(72, 90, 117, 0.18); display: flex; min-height: 3.35rem; padding: 0 1.25rem; }}
+        .brand {{ background: url('/helveticus/images/ofbiz-white.svg') left center / contain no-repeat; display: block; height: 2.1rem; margin-right: 1.4rem; width: 7.5rem; }}
+        nav {{ display: flex; flex-wrap: wrap; gap: 0.25rem; }}
+        nav a {{ color: #dcfffd; padding: 0.55rem 0.75rem; text-decoration: none; }}
+        nav a:hover, nav a.active {{ background: #dcfffd; color: #133d3b; }}
+        .section-nav {{ background: white; border-bottom: 1px solid #dfe0e4; padding: 0.6rem 1.25rem; }}
+        .section-nav a {{ border-radius: 2px; color: #1BC5BD; }}
+        .section-nav a:hover, .section-nav a.active {{ background: #1BC5BD; color: #dcfffd; }}
+        main {{ margin: 1.5rem; }}
+        .eyebrow {{ color: #1BC5BD; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }}
+        h1 {{ color: #181c32; margin-bottom: 0.25rem; }}
+        .note {{ background: #dcfffd; border-left: 4px solid #1BC5BD; padding: 1rem; margin: 1.5rem 0; }}
+        table {{ background: white; border-collapse: collapse; box-shadow: 0 0 15px rgba(72, 90, 117, 0.05); width: 100%; }}
+        th, td {{ border-bottom: 1px solid #dfe0e4; padding: 0.7rem; text-align: left; }}
+        th {{ background: #dcfffd; color: #133d3b; }}
         .number {{ text-align: right; font-variant-numeric: tabular-nums; }}
         form {{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; margin: 1.5rem 0; }}
-        label {{ color: #374963; font-size: 0.85rem; }}
-        input {{ box-sizing: border-box; margin-top: 0.25rem; padding: 0.45rem; width: 100%; }}
-        button {{ align-self: end; background: #005eb8; border: 0; color: white; cursor: pointer; padding: 0.55rem 0.8rem; }}
-        a {{ color: #005eb8; }}
+        label {{ color: #3F4254; font-size: 0.85rem; }}
+        input {{ border: 1px solid #dfe0e4; box-sizing: border-box; margin-top: 0.25rem; padding: 0.45rem; width: 100%; }}
+        button {{ align-self: end; background: #1BC5BD; border: 0; color: white; cursor: pointer; padding: 0.55rem 0.8rem; }}
+        a {{ color: #1BC5BD; }}
         .legacy-link {{ color: #586a84; font-size: 0.8rem; }}
         @media (max-width: 900px) {{ form {{ grid-template-columns: 1fr 1fr; }} }}
     </style>
 </head>
 <body>
-    {global_nav}
+    <header class="top-bar"><a class="brand" href="/webtools/control/main" aria-label="OFBiz home"></a>{global_nav}</header>
     {accounting_nav}
-    <div class="eyebrow">Modern microservice slice</div>
-    <h1>Accounting Invoices</h1>
-    <p>Read-only invoice projection served by <code>modern-accounting-invoice-service</code>.</p>
-    <p>This page replaces legacy <code>/accounting/control/findInvoices</code> when accessed through the hybrid gateway. Other Accounting routes still fall through to OFBiz.</p>
-    <div class="note">
-        Phase 1 intentionally exposes migration issues: legacy DB read dependency, invoice/item/payment joins,
-        SQL-derived totals, and rounding deltas such as paid invoice <code>8009</code>.
-        OFBiz remains source of truth until totals are reconciled with <code>InvoiceWorker</code>.
-    </div>
-    <form method="get" action="{action}">
-        <label>Invoice ID<input name="invoiceId" value="{invoice_id_value}"></label>
-        <label>Type<input name="invoiceTypeId" value="{invoice_type_value}" placeholder="SALES_INVOICE"></label>
-        <label>Status<input name="statusId" value="{status_value}" placeholder="INVOICE_PAID"></label>
-        <label>From party<input name="partyIdFrom" value="{party_from_value}"></label>
-        <label>To party<input name="partyId" value="{party_value}"></label>
-        <button type="submit">Search</button>
-    </form>
-    <p>Total invoices: {total_count}. API: <a href="/api/accounting/invoices?limit=10">/api/accounting/invoices</a>.</p>
-    <table>
-        <thead>
-            <tr>
-                <th>Invoice</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>From</th>
-                <th>To</th>
-                <th class="number">Total</th>
-                <th class="number">Applied</th>
-                <th class="number">Outstanding</th>
-            </tr>
-        </thead>
-        <tbody>{body}</tbody>
-    </table>
+    <main>
+        <div class="eyebrow">Modern microservice slice</div>
+        <h1>Accounting Invoices</h1>
+        <p>Read-only invoice projection served by <code>modern-accounting-invoice-service</code>.</p>
+        <p>This page replaces legacy <code>/accounting/control/findInvoices</code> when accessed through the hybrid gateway. Other Accounting routes still fall through to OFBiz.</p>
+        <div class="note">
+            Phase 1 intentionally exposes migration issues: legacy DB read dependency, invoice/item/payment joins,
+            SQL-derived totals, and rounding deltas such as paid invoice <code>8009</code>.
+            OFBiz remains source of truth until totals are reconciled with <code>InvoiceWorker</code>.
+        </div>
+        <form method="get" action="{action}">
+            <label>Invoice ID<input name="invoiceId" value="{invoice_id_value}"></label>
+            <label>Type<input name="invoiceTypeId" value="{invoice_type_value}" placeholder="SALES_INVOICE"></label>
+            <label>Status<input name="statusId" value="{status_value}" placeholder="INVOICE_PAID"></label>
+            <label>From party<input name="partyIdFrom" value="{party_from_value}"></label>
+            <label>To party<input name="partyId" value="{party_value}"></label>
+            <button type="submit">Search</button>
+        </form>
+        <p>Total invoices: {total_count}. API: <a href="/api/accounting/invoices?limit=10">/api/accounting/invoices</a>.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Invoice</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th class="number">Total</th>
+                    <th class="number">Applied</th>
+                    <th class="number">Outstanding</th>
+                </tr>
+            </thead>
+            <tbody>{body}</tbody>
+        </table>
+    </main>
 </body>
 </html>"""
 
-    def render_nav(self, links, active=None):
+    def render_nav(self, links, class_name, active=None):
         rendered = []
         for label, href in links:
             klass = " class=\"active\"" if label == active else ""
             rendered.append(f"<a{klass} href=\"{escape(href)}\">{escape(label)}</a>")
-        return "<nav>" + "".join(rendered) + "</nav>"
+        return f"<nav class=\"{class_name}\">" + "".join(rendered) + "</nav>"
 
     def create_invoice(self, payload):
         required = ("invoiceTypeId", "partyIdFrom", "partyId")
