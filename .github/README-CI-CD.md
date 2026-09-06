@@ -9,6 +9,7 @@
 - `build.yml`
   SonarQube Cloud build and analysis
   → Trigger: push / PR on `trunk` and `feat-*`
+  → Pull request analysis passes the PR number, source branch, and base branch explicitly so the PR baseline is the target branch, normally `trunk`.
 
 - `docker-image.yml`  
   Build and push images to `ghcr.io/apache/ofbiz`  
