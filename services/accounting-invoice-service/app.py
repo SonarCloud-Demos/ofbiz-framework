@@ -71,7 +71,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, self.list_invoices(query))
                 return
 
-            if path == "/modern/accounting/invoices":
+            if path in ("/modern/accounting/invoices", "/accounting/control/findInvoices"):
                 self.respond_html(200, self.render_invoice_list(query))
                 return
 
@@ -184,7 +184,10 @@ class Handler(BaseHTTPRequestHandler):
             currency = escape(invoice.get("currencyUomId") or "")
             rows.append(f"""
                 <tr>
-                    <td><a href="/api/accounting/invoices/{invoice_id}">{invoice_id}</a></td>
+                    <td>
+                        <a href="/api/accounting/invoices/{invoice_id}">{invoice_id}</a>
+                        <div><a class="legacy-link" href="/accounting/control/viewInvoice?invoiceId={invoice_id}">Legacy detail</a></div>
+                    </td>
                     <td>{invoice_type}</td>
                     <td>{status}</td>
                     <td>{party_from}</td>
@@ -197,6 +200,12 @@ class Handler(BaseHTTPRequestHandler):
 
         body = "\n".join(rows)
         total_count = result["pagination"]["total"]
+        action = "/accounting/control/findInvoices"
+        invoice_id_value = escape(query.get("invoiceId", [""])[0])
+        invoice_type_value = escape(query.get("invoiceTypeId", [""])[0])
+        status_value = escape(query.get("statusId", [""])[0])
+        party_from_value = escape(query.get("partyIdFrom", [""])[0])
+        party_value = escape(query.get("partyId", [""])[0])
         return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -211,18 +220,33 @@ class Handler(BaseHTTPRequestHandler):
         th, td {{ border-bottom: 1px solid #d8dee8; padding: 0.7rem; text-align: left; }}
         th {{ background: #edf2f7; }}
         .number {{ text-align: right; font-variant-numeric: tabular-nums; }}
+        form {{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; margin: 1.5rem 0; }}
+        label {{ color: #374963; font-size: 0.85rem; }}
+        input {{ box-sizing: border-box; margin-top: 0.25rem; padding: 0.45rem; width: 100%; }}
+        button {{ align-self: end; background: #005eb8; border: 0; color: white; cursor: pointer; padding: 0.55rem 0.8rem; }}
         a {{ color: #005eb8; }}
+        .legacy-link {{ color: #586a84; font-size: 0.8rem; }}
+        @media (max-width: 900px) {{ form {{ grid-template-columns: 1fr 1fr; }} }}
     </style>
 </head>
 <body>
     <div class="eyebrow">Modern microservice slice</div>
     <h1>Accounting Invoices</h1>
     <p>Read-only invoice projection served by <code>modern-accounting-invoice-service</code>.</p>
+    <p>This page replaces legacy <code>/accounting/control/findInvoices</code> when accessed through the hybrid gateway. Other Accounting routes still fall through to OFBiz.</p>
     <div class="note">
         Phase 1 intentionally exposes migration issues: legacy DB read dependency, invoice/item/payment joins,
         SQL-derived totals, and rounding deltas such as paid invoice <code>8009</code>.
         OFBiz remains source of truth until totals are reconciled with <code>InvoiceWorker</code>.
     </div>
+    <form method="get" action="{action}">
+        <label>Invoice ID<input name="invoiceId" value="{invoice_id_value}"></label>
+        <label>Type<input name="invoiceTypeId" value="{invoice_type_value}" placeholder="SALES_INVOICE"></label>
+        <label>Status<input name="statusId" value="{status_value}" placeholder="INVOICE_PAID"></label>
+        <label>From party<input name="partyIdFrom" value="{party_from_value}"></label>
+        <label>To party<input name="partyId" value="{party_value}"></label>
+        <button type="submit">Search</button>
+    </form>
     <p>Total invoices: {total_count}. API: <a href="/api/accounting/invoices?limit=10">/api/accounting/invoices</a>.</p>
     <table>
         <thead>

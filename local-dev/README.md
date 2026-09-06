@@ -17,6 +17,8 @@ docker compose -p erp-local -f local-dev/docker-compose.yml up -d
 ## URLs
 
 - Hybrid UI entry: `https://localhost:18080/webtools`
+- Strangled legacy invoice search route: `https://localhost:18080/accounting/control/findInvoices`
+- Direct legacy invoice search fallback: `https://localhost:18443/accounting/control/findInvoices`
 - Modern invoice UI: `https://localhost:18080/modern/accounting/invoices`
 - Modern invoice API: `https://localhost:18080/api/accounting/invoices?limit=10`
 - Modern invoice detail API: `https://localhost:18080/api/accounting/invoices/8009`
@@ -28,7 +30,7 @@ The direct legacy fallback must render same-origin asset and form URLs on `https
 
 ## Phase 1 Slice
 
-`modern-accounting-invoice-service` is the first meaningful migration slice. It reads the legacy OFBiz Postgres invoice tables and exposes a modern read-only invoice projection:
+`modern-accounting-invoice-service` is the first meaningful migration slice. The gateway routes legacy Accounting invoice search (`/accounting/control/findInvoices`) to this service while leaving the rest of Accounting in OFBiz. It reads the legacy OFBiz Postgres invoice tables and exposes a modern read-only invoice projection:
 
 - invoice header, type, status, parties, dates, currency
 - invoice item count and SQL-derived total
