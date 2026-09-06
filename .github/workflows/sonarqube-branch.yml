@@ -1,15 +1,14 @@
-name: SonarQube PR
+name: SonarQube Branch
 
 on:
-  pull_request:
+  push:
     branches:
       - trunk
       - 'feat-*'
-    types: [opened, synchronize, reopened]
 
 jobs:
   build:
-    name: Build and analyze pull request
+    name: Build and analyze branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -36,11 +35,7 @@ jobs:
         run: chmod +x gradlew gradle/init-gradle-wrapper.sh
       - name: Initialize Gradle wrapper
         run: ./gradle/init-gradle-wrapper.sh
-      - name: Build and analyze pull request
+      - name: Build and analyze branch
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: >
-          ./gradlew build sonar --info
-          -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
-          -Dsonar.pullrequest.branch=${{ github.head_ref }}
-          -Dsonar.pullrequest.base=${{ github.base_ref }}
+        run: ./gradlew build sonar --info
