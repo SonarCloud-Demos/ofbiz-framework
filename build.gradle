@@ -47,6 +47,7 @@ sonar {
         property "sonar.projectKey", "SonarCloud-Demos_ofbiz-framework"
         property "sonar.organization", "sonarcloud-demos"
         property "sonar.sourceEncoding", "UTF-8"
+        property "sonar.python.version", "3.12"
         property "sonar.sources", [
                 'applications',
                 'framework',
