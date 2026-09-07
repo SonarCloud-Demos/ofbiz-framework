@@ -76,6 +76,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond_html(200, self.render_invoice_list(query))
                 return
 
+            detail_prefix = "/modern/accounting/invoices/"
+            if path.startswith(detail_prefix):
+                invoice_id = path[len(detail_prefix):]
+                if not invoice_id or "/" in invoice_id:
+                    self.respond(404, {"error": "not_found", "path": parsed.path})
+                    return
+                invoice = self.get_invoice(invoice_id)
+                if invoice is None:
+                    self.respond(404, {"error": "invoice_not_found", "invoiceId": invoice_id})
+                    return
+                self.respond_html(200, self.render_invoice_detail(invoice["data"]))
+                return
+
             prefix = "/api/accounting/invoices/"
             if path.startswith(prefix):
                 invoice_id = path[len(prefix):]
@@ -252,8 +265,9 @@ class Handler(BaseHTTPRequestHandler):
             rows.append(f"""
                 <tr>
                     <td>
-                        <a href="/api/accounting/invoices/{invoice_id}">{invoice_id}</a>
+                        <a href="/modern/accounting/invoices/{invoice_id}">{invoice_id}</a>
                         <div><a class="legacy-link" href="/accounting/control/viewInvoice?invoiceId={invoice_id}">Legacy detail</a></div>
+                        <div><a class="legacy-link" href="/api/accounting/invoices/{invoice_id}">JSON API</a></div>
                     </td>
                     <td>{invoice_type}</td>
                     <td>{status}</td>
@@ -374,6 +388,140 @@ class Handler(BaseHTTPRequestHandler):
             klass = " class=\"active\"" if label == active else ""
             rendered.append(f"<a{klass} href=\"{escape(href)}\">{escape(label)}</a>")
         return f"<nav class=\"{class_name}\">" + "".join(rendered) + "</nav>"
+
+    def render_invoice_detail(self, invoice):
+        invoice_id = escape(invoice["invoiceId"])
+        global_nav = self.render_nav([
+            ("Webtools", "/webtools/control/main"),
+            ("Accounting", "/accounting/control/main"),
+            ("Order", "/ordermgr/control/main"),
+            ("Catalog", "/catalog/control/main"),
+            ("Party", "/partymgr/control/main"),
+        ], class_name="global-nav", active="Accounting")
+        accounting_nav = self.render_nav([
+            ("Invoices", "/accounting/control/findInvoices"),
+            ("Payments", "/accounting/control/findPayments"),
+            ("Payment Groups", "/accounting/control/FindPaymentGroup"),
+            ("Transactions", "/accounting/control/FindGatewayResponses"),
+            ("Gateway Config", "/accounting/control/FindPaymentGatewayConfig"),
+            ("Billing Accounts", "/accounting/control/FindBillingAccount"),
+            ("Financial Accounts", "/accounting/control/FinAccountMain"),
+            ("Tax Authorities", "/accounting/control/FindTaxAuthority"),
+            ("Agreements", "/accounting/control/FindAgreement"),
+            ("Fixed Assets", "/accounting/control/ListFixedAssets"),
+            ("Budgets", "/accounting/control/ListBudgets"),
+            ("GL Settings", "/accounting/control/globalGLSettings"),
+            ("Companies", "/accounting/control/ListCompanies"),
+        ], class_name="section-nav", active="Invoices")
+
+        header_rows = self.render_detail_rows(invoice, [
+            ("Invoice ID", "invoiceId"),
+            ("Type", "invoiceTypeDescription"),
+            ("Status", "statusDescription"),
+            ("From Party", "partyIdFrom"),
+            ("To Party", "partyId"),
+            ("Invoice Date", "invoiceDate"),
+            ("Due Date", "dueDate"),
+            ("Paid Date", "paidDate"),
+            ("Currency", "currencyUomId"),
+            ("Description", "description"),
+            ("Total", "invoiceTotal"),
+            ("Applied", "appliedTotal"),
+            ("Outstanding", "outstandingTotal"),
+            ("Reference", "referenceNumber"),
+        ])
+        item_rows = self.render_table_rows(invoice.get("items", []), [
+            ("Seq", "invoiceItemSeqId"),
+            ("Type", "invoiceItemTypeId"),
+            ("Product", "productId"),
+            ("Description", "description"),
+            ("Qty", "quantity"),
+            ("Amount", "amount"),
+            ("Line Total", "lineTotal"),
+        ])
+        payment_rows = self.render_table_rows(invoice.get("paymentApplications", []), [
+            ("Application", "paymentApplicationId"),
+            ("Payment", "paymentId"),
+            ("Item Seq", "invoiceItemSeqId"),
+            ("Billing Account", "billingAccountId"),
+            ("Applied", "amountApplied"),
+        ])
+        status_rows = self.render_table_rows(invoice.get("statusHistory", []), [
+            ("Status", "statusId"),
+            ("Date", "statusDate"),
+            ("Changed By", "changeByUserLoginId"),
+        ])
+
+        return f"""<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Modern Invoice {invoice_id}</title>
+    <style>
+        body {{ background: #f2f3f7; color: #181c32; font-family: Arial, sans-serif; margin: 0; }}
+        .top-bar {{ align-items: center; background: #1BC5BD; box-shadow: 0 2px 8px rgba(72, 90, 117, 0.18); display: flex; min-height: 3.35rem; padding: 0 1.25rem; }}
+        .brand {{ background: url('/helveticus/images/ofbiz-white.svg') left center / contain no-repeat; display: block; height: 2.1rem; margin-right: 1.4rem; width: 7.5rem; }}
+        nav {{ display: flex; flex-wrap: wrap; gap: 0.25rem; }}
+        nav a {{ color: #dcfffd; padding: 0.55rem 0.75rem; text-decoration: none; }}
+        nav a:hover, nav a.active {{ background: #dcfffd; color: #133d3b; }}
+        .section-nav {{ background: white; border-bottom: 1px solid #dfe0e4; padding: 0.6rem 1.25rem; }}
+        .section-nav a {{ border-radius: 2px; color: #1BC5BD; }}
+        .section-nav a:hover, .section-nav a.active {{ background: #1BC5BD; color: #dcfffd; }}
+        main {{ margin: 1.5rem; }}
+        .eyebrow {{ color: #1BC5BD; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }}
+        h1, h2 {{ color: #181c32; }}
+        .actions {{ display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1rem 0 1.5rem; }}
+        .actions a {{ background: #1BC5BD; color: white; padding: 0.55rem 0.8rem; text-decoration: none; }}
+        .actions a.secondary {{ background: white; border: 1px solid #1BC5BD; color: #1BC5BD; }}
+        table {{ background: white; border-collapse: collapse; box-shadow: 0 0 15px rgba(72, 90, 117, 0.05); margin-bottom: 1.5rem; width: 100%; }}
+        th, td {{ border-bottom: 1px solid #dfe0e4; padding: 0.7rem; text-align: left; vertical-align: top; }}
+        th {{ background: #dcfffd; color: #133d3b; }}
+        .number {{ text-align: right; font-variant-numeric: tabular-nums; }}
+        .summary th {{ width: 12rem; }}
+    </style>
+</head>
+<body>
+    <header class="top-bar"><a class="brand" href="/webtools/control/main" aria-label="OFBiz home"></a>{global_nav}</header>
+    {accounting_nav}
+    <main>
+        <div class="eyebrow">Modern microservice detail</div>
+        <h1>Invoice {invoice_id}</h1>
+        <div class="actions">
+            <a href="/accounting/control/findInvoices">Back to Invoices</a>
+            <a class="secondary" href="/accounting/control/viewInvoice?invoiceId={invoice_id}">Legacy Detail</a>
+            <a class="secondary" href="/api/accounting/invoices/{invoice_id}">JSON API</a>
+        </div>
+        <h2>Header</h2>
+        <table class="summary"><tbody>{header_rows}</tbody></table>
+        <h2>Items</h2>
+        {item_rows}
+        <h2>Payment Applications</h2>
+        {payment_rows}
+        <h2>Status History</h2>
+        {status_rows}
+    </main>
+</body>
+</html>"""
+
+    def render_detail_rows(self, data, fields):
+        rows = []
+        for label, field in fields:
+            value = data.get(field)
+            rows.append(f"<tr><th>{escape(label)}</th><td>{escape(str(value or ''))}</td></tr>")
+        return "".join(rows)
+
+    def render_table_rows(self, records, fields):
+        headers = "".join(f"<th>{escape(label)}</th>" for label, _ in fields)
+        if not records:
+            return f"<table><thead><tr>{headers}</tr></thead><tbody><tr><td colspan=\"{len(fields)}\">No rows</td></tr></tbody></table>"
+        rows = []
+        for record in records:
+            cells = []
+            for _, field in fields:
+                value = record.get(field)
+                cells.append(f"<td>{escape(str(value or ''))}</td>")
+            rows.append("<tr>" + "".join(cells) + "</tr>")
+        return f"<table><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
 
     def create_invoice(self, payload):
         required = ("invoiceTypeId", "partyIdFrom", "partyId")
