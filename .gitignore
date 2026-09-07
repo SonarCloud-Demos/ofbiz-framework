@@ -39,5 +39,9 @@ desktop.ini
 .*.swo
 *.patch
 node_modules/
+.claude/
+.mcp.json
+CLAUDE.md
+claude_session_id
 /docs/asciidoc/images/
 docker/examples/postgres-demo/logs/
