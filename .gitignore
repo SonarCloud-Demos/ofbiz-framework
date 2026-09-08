@@ -21,6 +21,7 @@ runtime/tempfiles/*
 runtime/indexes/products/
 !runtime/tempfiles/README
 changelog
+hooks/
 .classpath
 .project
 .settings
