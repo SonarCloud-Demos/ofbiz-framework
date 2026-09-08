@@ -39,6 +39,8 @@ desktop.ini
 .*.swo
 *.patch
 node_modules/
+__pycache__/
+*.py[cod]
 .claude/
 .serena/
 .mcp.json
@@ -46,3 +48,4 @@ CLAUDE.md
 claude_session_id
 /docs/asciidoc/images/
 docker/examples/postgres-demo/logs/
+local-dev/logs/
