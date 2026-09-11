@@ -19,6 +19,8 @@ under the License.
 
 # Apache OFBiz® 
 
+<!-- SonarQube branch rescan trigger. -->
+
 [![Licence](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0)
 [![Version](https://img.shields.io/badge/Version-trunk-red.svg)](https://github.com/apache/ofbiz-framework)
 
