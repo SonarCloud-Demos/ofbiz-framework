@@ -37,5 +37,7 @@ jobs:
         run: ./gradle/init-gradle-wrapper.sh
       - name: Build and analyze branch
         env:
+          GRADLE_OPTS: -Xmx6g -Dfile.encoding=UTF-8
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_SCANNER_JAVA_OPTS: -Xmx6g
         run: ./gradlew build sonar --info
