@@ -1,0 +1,13 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: modern-accounting-invoice-service
+  datasource:
+    url: ${OFBIZ_JDBC_URL:jdbc:postgresql://localhost:5432/ofbizmaindb}
+    username: ${OFBIZ_DB_USER:ofbiz}
+    password: ${OFBIZ_DB_PASSWORD:ofbiz}
+  jackson:
+    default-property-inclusion: non_null
+management:
+  endpoints.web.exposure.include: health
