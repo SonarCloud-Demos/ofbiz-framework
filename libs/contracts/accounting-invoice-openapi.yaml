@@ -1,0 +1,65 @@
+openapi: 3.0.3
+info:
+  title: Modern Accounting Invoice Phase 1 API
+  version: 0.1.0
+  description: >-
+    Transitional projection over legacy OFBiz PostgreSQL. Totals are SQL-derived
+    and must be reconciled with InvoiceWorker before write cutover.
+servers:
+  - url: https://localhost:18080
+paths:
+  /api/accounting/invoices:
+    get:
+      summary: Search invoice headers
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0}}
+        - {name: invoiceId, in: query, schema: {type: string}}
+        - {name: invoiceTypeId, in: query, schema: {type: string}}
+        - {name: statusId, in: query, schema: {type: string}}
+        - {name: partyIdFrom, in: query, schema: {type: string}}
+        - {name: partyId, in: query, schema: {type: string}}
+      responses:
+        '200': {description: Paginated invoice projection}
+    post:
+      summary: Create an invoice header only
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/HeaderCommand'}}}}
+      responses:
+        '201': {description: Header created}
+        '409': {description: Invoice ID already exists}
+  /api/accounting/invoices/{invoiceId}:
+    parameters:
+      - {name: invoiceId, in: path, required: true, schema: {type: string}}
+    get:
+      summary: Get header, lines, applications, and status history
+      responses:
+        '200': {description: Invoice detail}
+        '404': {description: Invoice not found}
+    put:
+      summary: Update permitted invoice-header fields only
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/HeaderCommand'}}}}
+      responses:
+        '200': {description: Header updated}
+        '404': {description: Invoice not found}
+    delete:
+      summary: Delete only when no items or payment applications exist
+      responses:
+        '204': {description: Header deleted}
+        '404': {description: Invoice not found}
+        '409': {description: Dependent items or payment applications exist}
+components:
+  schemas:
+    HeaderCommand:
+      type: object
+      properties:
+        invoiceId: {type: string, description: Required on create and ignored on update}
+        invoiceTypeId: {type: string}
+        partyIdFrom: {type: string}
+        partyId: {type: string}
+        roleTypeId: {type: string}
+        statusId: {type: string}
+        invoiceDate: {type: string, format: date-time}
+        dueDate: {type: string, format: date-time}
+        description: {type: string}
+        referenceNumber: {type: string}
+        currencyUomId: {type: string}

@@ -18,6 +18,13 @@
 # under the License.
 #####################################################################
 
+FROM node:22-alpine AS theme-assets
+WORKDIR /assets
+COPY themes/common-theme/webapp/common-theme/js/package.json themes/common-theme/webapp/common-theme/js/package-lock.json ./
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=true \
+    --mount=type=secret,id=corporate_ca,target=/run/secrets/corporate-ca.pem,required=true \
+    NODE_EXTRA_CA_CERTS=/run/secrets/corporate-ca.pem npm ci --ignore-scripts --legacy-peer-deps
+
 FROM eclipse-temurin:17@sha256:e8d451f3b5aa6422c2b00bb913cb8d37a55a61934259109d945605c5651de9a6 AS builder
 
 # Git is used for various OFBiz build tasks.
@@ -80,6 +87,10 @@ WORKDIR /ofbiz
 # Extract the OFBiz tar distribution created by the builder stage.
 RUN --mount=type=bind,from=builder,source=/builder/build/distributions/ofbiz.tar,target=/mnt/ofbiz.tar \
     ["tar", "--extract", "--strip-components=1", "--file=/mnt/ofbiz.tar"]
+
+# Theme dependencies are built with the npm configuration mounted as a secret;
+# neither the token nor the host npm configuration is copied into this image.
+COPY --from=theme-assets --chown=ofbiz:ofbiz /assets/node_modules /ofbiz/themes/common-theme/webapp/common-theme/js/node_modules
 
 # Create directories for OFBiz volume mountpoints.
 RUN ["mkdir", "/ofbiz/runtime", "/ofbiz/config", "/ofbiz/lib-extra"]

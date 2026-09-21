@@ -1,0 +1,12 @@
+server:
+  port: ${SERVER_PORT:18106}
+spring:
+  application.name: modern-accounting-invoice-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:15432/ofbizmaindb}
+    username: ${SPRING_DATASOURCE_USERNAME:ofbiz}
+    password: ${SPRING_DATASOURCE_PASSWORD:ofbiz}
+  jackson:
+    default-property-inclusion: non_null
+management:
+  endpoints.web.exposure.include: health,info
