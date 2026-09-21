@@ -194,7 +194,7 @@ Phase 1 SonarQube and CI contract:
 
 - Remove competing GitHub analysis before adding SonarQube: Dependabot config, CodeQL workflow, GitHub Dependency Review workflow, OpenSSF Scorecard workflow, CodeQL/SARIF upload usage, and related README badges.
 - Keep SonarQube as the only repository analysis signal for the demo. Do not add CodeQL, Dependabot, Dependency Review, OpenSSF Scorecard, or SARIF upload workflows back unless demo scope changes.
-- Use the SonarQube Gradle plugin in `build.gradle`: `org.sonarqube` version `7.3.1.8318` with project key `e-corp-demo_ofbiz-framework` and organization `e-corp-demo`.
+- Use the SonarQube Gradle plugin in `build.gradle`: `org.sonarqube` version `7.3.1.8318` with project key `SonarCloud-Demos_ofbiz-framework` and organization `sonarcloud-demos`.
 - Do not commit `SONAR_TOKEN`. GitHub Actions must read it from `${{ secrets.SONAR_TOKEN }}` only.
 - Split SonarQube workflows by analysis type, so PR analysis cannot be confused with branch analysis.
 - `build.yml` is the SonarQube PR workflow. It triggers only on `pull_request` targeting `trunk` or `feat-*`.
