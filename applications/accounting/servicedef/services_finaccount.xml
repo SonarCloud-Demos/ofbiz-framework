@@ -148,6 +148,7 @@ under the License.
     <service name="finAccountDeposit" engine="java"
             location="org.apache.ofbiz.accounting.finaccount.FinAccountPaymentServices" invoke="finAccountDeposit" auth="true">
         <description>Deposit Funds into a Financial Account</description>
+        <permission-service service-name="acctgFinAcctPermissionCheck" main-action="UPDATE"/>
         <attribute name="finAccountId" type="String" mode="IN" optional="false"/>
         <attribute name="productStoreId" type="String" mode="IN" optional="true"/>
         <attribute name="isRefund" type="Boolean" mode="IN" optional="true"/>
@@ -166,6 +167,7 @@ under the License.
             location="org.apache.ofbiz.accounting.finaccount.FinAccountPaymentServices" invoke="finAccountWithdraw" auth="true">
         <!-- NOTE: never set require-new-transaction on this service, needs to be called with other services in same transaction to protect operations such as the payment capture one -->
         <description>Deposit Funds into a Financial Account</description>
+        <permission-service service-name="acctgFinAcctPermissionCheck" main-action="UPDATE"/>
         <attribute name="finAccountId" type="String" mode="IN" optional="false"/>
         <attribute name="productStoreId" type="String" mode="IN" optional="true"/>
         <attribute name="requireBalance" type="Boolean" mode="IN" optional="true"/>

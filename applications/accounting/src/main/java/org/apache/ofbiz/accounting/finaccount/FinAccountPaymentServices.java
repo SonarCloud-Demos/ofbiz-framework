@@ -661,6 +661,12 @@ public class FinAccountPaymentServices {
             currencyUom = EntityUtilProperties.getPropertyValue("general", "currency.uom.id.default", "USD", delegator);
         }
 
+        // validate the amount
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
+            return ServiceUtil.returnError(UtilProperties.getMessage(RES_ERROR,
+                    "AccountingFinAccountMustBePositive", locale));
+        }
+
         GenericValue finAccount;
         try {
             finAccount = EntityQuery.use(delegator).from("FinAccount").where("finAccountId", finAccountId).queryOne();
