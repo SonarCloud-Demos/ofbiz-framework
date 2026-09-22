@@ -38,4 +38,5 @@ jobs:
       - name: Build and analyze branch
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_SCANNER_JAVA_OPTS: -Xmx5g
         run: ./gradlew build jacocoTestReport sonar --info

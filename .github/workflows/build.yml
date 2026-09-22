@@ -39,6 +39,7 @@ jobs:
       - name: Build and analyze pull request
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_SCANNER_JAVA_OPTS: -Xmx5g
         run: >
           ./gradlew build jacocoTestReport sonar --info
           -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
