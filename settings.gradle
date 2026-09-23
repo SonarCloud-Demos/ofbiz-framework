@@ -51,6 +51,12 @@ buildCache {
 apply from: 'common.gradle'
 rootProject.name = 'ofbiz'
 
+// Modern services remain independently buildable, while composite inclusion
+// lets the root lifecycle and Sonar analysis compile and test the whole
+// repository with the standard ./gradlew entry point.
+includeBuild('services/template-service')
+includeBuild('services/shell-bff')
+
 def fileSep = System.getProperty('file.separator')
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 

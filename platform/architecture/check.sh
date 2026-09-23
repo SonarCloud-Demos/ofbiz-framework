@@ -18,6 +18,23 @@ while IFS= read -r component; do
         ''|'#'*) continue ;;
     esac
     require_path "$component"
+    case "$component" in
+        services/*)
+            if ! rg -q -F "includeBuild('$component')" settings.gradle; then
+                echo "modern service is not included in the root Gradle lifecycle: $component" >&2
+                failed=1
+            fi
+            ;;
+        web/*)
+            for lifecycle in build test; do
+                require_path "$component/$lifecycle.sh"
+                if ! rg -q -F "file('$component/$lifecycle.sh')" build.gradle; then
+                    echo "modern web component is not included in root Gradle $lifecycle: $component" >&2
+                    failed=1
+                fi
+            done
+            ;;
+    esac
 done < platform/components.txt
 
 for path in platform/contracts platform/ownership.yaml local-dev/docker-compose.yml; do

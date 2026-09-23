@@ -28,6 +28,21 @@ Keep credentials and trust material outside the repository as described in
 is installed. `build` and `test` use the Gradle wrapper with a workspace-local
 cache. Set `MODERN_GRADLE_INIT_SCRIPT` to the approved init script.
 
+The root Gradle lifecycle is authoritative for the complete monorepo:
+
+```sh
+./gradlew --init-script gradle/modern-artifactory.init.gradle build
+./gradlew --init-script gradle/modern-artifactory.init.gradle test
+./gradlew --init-script gradle/modern-artifactory.init.gradle sonar
+```
+
+`build` and `test` include OFBiz, every registered modern Java composite build,
+the modern web artifacts, and repository architecture checks. `sonar` depends
+on the complete test lifecycle and includes the modern services' compiled main
+and test bytecode plus web, platform, infrastructure, local-development and
+migration sources. A globally installed approved init script may omit the
+explicit `--init-script` argument.
+
 ```sh
 export MODERN_GRADLE_INIT_SCRIPT="$PWD/gradle/modern-artifactory.init.gradle"
 export ARTIFACTORY_USER_FILE=/secure/path/username

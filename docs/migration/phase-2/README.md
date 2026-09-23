@@ -45,6 +45,9 @@ These controls are a repository baseline, not penetration-test evidence.
 - [Exit-gate evidence](exit-gate.md)
 - [Remaining evidence waiver](remaining-evidence-waiver.md)
 
+The modern services and shell participate in the root Gradle `build`, `test`,
+and `sonar` lifecycles through composite builds and aggregate web tasks.
+
 ## Exit gate
 
 The Phase 2 exit gate is complete by sponsor waiver. The missing and unvalidated

@@ -91,24 +91,14 @@ run_check() {
 
 run_build() {
     gradle_args
-    GRADLE_USER_HOME="$gradle_home" "$repo_root/services/template-service/gradlew" \
-        --init-script "$MODERN_GRADLE_INIT_SCRIPT" assemble
-    GRADLE_USER_HOME="$gradle_home" "$repo_root/services/shell-bff/gradlew" \
-        --init-script "$MODERN_GRADLE_INIT_SCRIPT" assemble
-    "$repo_root/web/template-route/build.sh"
-    "$repo_root/web/shell/build.sh"
+    GRADLE_USER_HOME="$gradle_home" "$repo_root/gradlew" \
+        --init-script "$MODERN_GRADLE_INIT_SCRIPT" build
 }
 
 run_test() {
     gradle_args
-    GRADLE_USER_HOME="$gradle_home" "$repo_root/services/template-service/gradlew" \
+    GRADLE_USER_HOME="$gradle_home" "$repo_root/gradlew" \
         --init-script "$MODERN_GRADLE_INIT_SCRIPT" test
-    GRADLE_USER_HOME="$gradle_home" "$repo_root/services/shell-bff/gradlew" \
-        --init-script "$MODERN_GRADLE_INIT_SCRIPT" test
-    "$repo_root/web/template-route/test.sh"
-    "$repo_root/web/shell/test.sh"
-    "$repo_root/platform/architecture/check.sh"
-    "$repo_root/platform/architecture/check-phase-2.sh"
 }
 
 if [ "$#" -eq 0 ]; then
