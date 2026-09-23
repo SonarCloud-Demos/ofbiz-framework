@@ -24,6 +24,17 @@ A compliant build must:
 - leave no token in Git, image layers, build arguments, environment dumps, or generated files;
 - work from a fresh checkout without relying on pre-existing host `node_modules` directories.
 
+### Phase 1 container-registry decision
+
+On 2026-09-23 the migration sponsor authorized public container registries for
+the Phase 1 paved road. `local-dev/images.env.example` records the reviewed
+images by immutable multi-platform digest. Maven and Gradle artifacts still
+resolve exclusively through Artifactory, credentials remain file-injected, and
+the corporate CA remains explicitly trusted. The internal-registry guidance
+below remains the target for environments whose supply-chain policy requires
+mirroring; it is not a Phase 1 local-development prerequisite under this
+decision.
+
 ## 1. Verify the host npm configuration
 
 Use commands that do not display the token:

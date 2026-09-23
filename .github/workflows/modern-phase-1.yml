@@ -1,0 +1,30 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with this
+# work for additional information regarding copyright ownership.
+name: Modern platform validation
+on:
+  pull_request:
+    paths: [modern, 'services/**', 'web/**', 'platform/**', 'infra/**', 'local-dev/**', 'docs/migration/**', 'docs/runbooks/**']
+  push:
+    branches: [trunk]
+    paths: [modern, 'services/**', 'web/**', 'platform/**', 'infra/**', 'local-dev/**']
+permissions:
+  contents: read
+jobs:
+  policy:
+    runs-on: [self-hosted, modern-platform]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Validate repository policy
+        run: ./modern check
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive infra
+      - name: Validate Terraform modules without a backend
+        run: |
+          for directory in infra/bootstrap/state infra/environments/dev infra/environments/staging; do
+            terraform -chdir="$directory" init -backend=false -input=false
+            terraform -chdir="$directory" validate
+          done
+      - name: Check for committed credentials
+        run: |
+          ! git grep -nE '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AccountKey=|_authToken=)' -- . ':!gradle/wrapper/gradle-wrapper.jar'

@@ -1,0 +1,129 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+compose_file="$repo_root/local-dev/docker-compose.yml"
+images_file="$repo_root/local-dev/images.env"
+example_images_file="$repo_root/local-dev/images.env.example"
+gradle_home="$repo_root/.gradle-modern"
+
+usage() {
+    cat <<'EOF'
+Usage: ./modern <command> [<command> ...]
+
+Commands:
+  check   Validate paved-road structure and local topology without starting it
+  build   Build all registered paved-road components
+  test    Test all registered paved-road components
+  up      Build and start the core hybrid-development topology
+  down    Stop the topology without deleting data
+  reset   Delete local topology data (requires --confirm-delete-local-data)
+  smoke   Verify running paved-road service and route
+EOF
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || {
+        echo "required command not found: $1" >&2
+        exit 1
+    }
+}
+
+gradle_args() {
+    if [ -z "${MODERN_GRADLE_INIT_SCRIPT:-}" ]; then
+        echo 'Set MODERN_GRADLE_INIT_SCRIPT to the approved Artifactory init script.' >&2
+        exit 1
+    fi
+    if [ ! -f "$MODERN_GRADLE_INIT_SCRIPT" ]; then
+        echo "Gradle init script does not exist: $MODERN_GRADLE_INIT_SCRIPT" >&2
+        exit 1
+    fi
+    for variable in ARTIFACTORY_USER_FILE ARTIFACTORY_TOKEN_FILE CORPORATE_CA_FILE; do
+        eval 'path=${'"$variable"':-}'
+        if [ -z "$path" ] || [ ! -r "$path" ]; then
+            echo "$variable must name a readable file." >&2
+            exit 1
+        fi
+    done
+    for variable in ARTIFACTORY_MAVEN_URL ARTIFACTORY_GRADLE_PLUGIN_URL; do
+        eval 'value=${'"$variable"':-}'
+        if [ -z "$value" ]; then
+            echo "$variable must be set." >&2
+            exit 1
+        fi
+    done
+}
+
+compose() {
+    require_command docker
+    if [ ! -f "$images_file" ]; then
+        echo "Create $images_file from $example_images_file and use approved images." >&2
+        exit 1
+    fi
+    docker compose --env-file "$images_file" -f "$compose_file" "$@"
+}
+
+run_check() {
+    require_command rg
+    sh -n "$repo_root/modern" "$repo_root/platform/architecture/check.sh" \
+        "$repo_root/local-dev/smoke-test.sh" "$repo_root/web/template-route/build.sh" \
+        "$repo_root/web/template-route/test.sh"
+    "$repo_root/platform/architecture/check.sh"
+    "$repo_root/web/template-route/test.sh"
+    if command -v docker >/dev/null 2>&1; then
+        MODERN_GRADLE_INIT_SCRIPT="$repo_root/services/template-service/settings.gradle" \
+        MODERN_GRADLE_PROPERTIES="$repo_root/services/template-service/gradle.properties" \
+        ARTIFACTORY_USER_FILE="$repo_root/services/template-service/gradle.properties" \
+        ARTIFACTORY_TOKEN_FILE="$repo_root/services/template-service/gradle.properties" \
+        CORPORATE_CA_FILE="$repo_root/services/template-service/gradle.properties" \
+        ARTIFACTORY_MAVEN_URL="https://artifactory.example.invalid/maven" \
+        ARTIFACTORY_GRADLE_PLUGIN_URL="https://artifactory.example.invalid/gradle-plugins" \
+        MODERN_POSTGRES_PASSWORD_FILE="$repo_root/services/template-service/gradle.properties" \
+        docker compose --env-file "$example_images_file" -f "$compose_file" config --quiet
+    else
+        echo 'docker not found; skipped Compose schema validation' >&2
+    fi
+}
+
+run_build() {
+    gradle_args
+    GRADLE_USER_HOME="$gradle_home" "$repo_root/services/template-service/gradlew" \
+        --init-script "$MODERN_GRADLE_INIT_SCRIPT" assemble
+    "$repo_root/web/template-route/build.sh"
+}
+
+run_test() {
+    gradle_args
+    GRADLE_USER_HOME="$gradle_home" "$repo_root/services/template-service/gradlew" \
+        --init-script "$MODERN_GRADLE_INIT_SCRIPT" test
+    "$repo_root/web/template-route/test.sh"
+    "$repo_root/platform/architecture/check.sh"
+}
+
+if [ "$#" -eq 0 ]; then
+    usage
+    exit 2
+fi
+
+while [ "$#" -gt 0 ]; do
+    command_name=$1
+    shift
+    case "$command_name" in
+        check) run_check ;;
+        build) run_build ;;
+        test) run_test ;;
+        up) compose --profile core --profile full up --detach --build ;;
+        down) compose --profile core --profile full down ;;
+        smoke) "$repo_root/local-dev/smoke-test.sh" ;;
+        reset)
+            if [ "${1:-}" != '--confirm-delete-local-data' ]; then
+                echo 'reset deletes local volumes; pass --confirm-delete-local-data to continue' >&2
+                exit 2
+            fi
+            shift
+            compose --profile core --profile full down --volumes
+            ;;
+        -h|--help|help) usage ;;
+        *) echo "unknown command: $command_name" >&2; usage >&2; exit 2 ;;
+    esac
+done

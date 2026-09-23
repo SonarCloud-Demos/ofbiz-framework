@@ -4,6 +4,12 @@
 
 Phase 0 started on 2026-09-23. The repository-level static discovery is complete enough to establish the initial migration hypotheses and choose a provisional pilot. Runtime evidence, production characteristics, and stakeholder decisions are still outstanding; Phase 0 has **not** passed its exit gate.
 
+On 2026-09-23, the migration sponsor authorized Phase 1 to proceed under the
+risk acceptance recorded in [phase-1-authorization.md](phase-1-authorization.md).
+This authorization accepts the risk of beginning reversible platform work; it
+does not assert that missing production evidence or specialist reviews exist,
+and it does not permit a production pilot cutover.
+
 This folder is the working record for Phase 0:
 
 - [static-inventory.md](static-inventory.md) records migration-relevant assets and coupling visible in the tracked source tree;
@@ -85,6 +91,15 @@ Collect a baseline over at least one representative business cycle, including mo
 - [ ] Pilot journey, invariants, acceptance criteria, and rollback authority approved.
 - [ ] Named product/domain/platform/data/security/operations owners recorded.
 - [ ] ADRs created for approved target-platform choices.
+
+## Gate disposition
+
+**Conditionally waived for Phase 1 platform work on 2026-09-23.** The migration
+sponsor approved proceeding before every Phase 0 completion artifact is
+available. Open checklist items remain mandatory before production traffic,
+production data movement, or declaration of the Phase 0 exit gate as passed.
+See [phase-1-authorization.md](phase-1-authorization.md) for scope, constraints,
+and revocation conditions.
 
 ## Next working session
 

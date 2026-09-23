@@ -1,0 +1,26 @@
+openapi: 3.1.0
+info:
+  title: Template service
+  version: 1.0.0
+  x-owner: migration-platform-team
+  x-data-classification: internal
+paths:
+  /api/v1/example:
+    get:
+      operationId: getExample
+      responses:
+        "200":
+          description: Template response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExampleResponse"
+components:
+  schemas:
+    ExampleResponse:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message:
+          type: string

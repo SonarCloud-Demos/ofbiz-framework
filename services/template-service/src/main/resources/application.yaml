@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: template-service
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+logging:
+  structured:
+    format:
+      console: ecs
+server:
+  port: ${PORT:8080}

@@ -1,0 +1,104 @@
+name: ofbiz-modern
+
+services:
+  template-service:
+    profiles: [core, full]
+    build:
+      context: ..
+      dockerfile: services/template-service/Dockerfile
+      args:
+        JAVA_BUILD_IMAGE: ${MODERN_JAVA_BUILD_IMAGE:?set an approved build image}
+        JAVA_RUNTIME_IMAGE: ${MODERN_JAVA_RUNTIME_IMAGE:?set an approved runtime image}
+        ARTIFACTORY_MAVEN_URL: ${ARTIFACTORY_MAVEN_URL:?set the Maven repository URL}
+        ARTIFACTORY_GRADLE_PLUGIN_URL: ${ARTIFACTORY_GRADLE_PLUGIN_URL:?set the Gradle plugin repository URL}
+      secrets:
+        - artifactory_user
+        - artifactory_token
+        - corporate_ca
+    environment:
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    ports:
+      - "18082:8080"
+    healthcheck:
+      test: [CMD, java, -version]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  template-route:
+    profiles: [core, full]
+    build:
+      context: ..
+      dockerfile: web/template-route/Dockerfile
+      args:
+        STATIC_WEB_IMAGE: ${MODERN_STATIC_WEB_IMAGE:?set an approved static web image}
+    ports:
+      - "18081:8080"
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/healthz]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  postgres:
+    profiles: [core, full]
+    image: ${MODERN_POSTGRES_IMAGE:?set an approved PostgreSQL image}
+    environment:
+      POSTGRES_DB: template_service
+      POSTGRES_USER: template_service
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - template-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U template_service -d template_service]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  otel-collector:
+    profiles: [core, full]
+    image: ${MODERN_OTEL_COLLECTOR_IMAGE:?set an approved OpenTelemetry image}
+    command: [--config=/etc/otelcol/config.yaml]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+
+  legacy-ofbiz:
+    profiles: [full]
+    image: ${MODERN_OFBIZ_IMAGE:?set an approved OFBiz image}
+    ports:
+      - "18443:8443"
+
+  edge:
+    profiles: [full]
+    image: ${MODERN_STATIC_WEB_IMAGE:?set an approved static web image}
+    volumes:
+      - ./nginx-edge.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      template-service:
+        condition: service_healthy
+      template-route:
+        condition: service_healthy
+      legacy-ofbiz:
+        condition: service_started
+    ports:
+      - "18080:8080"
+
+volumes:
+  template-postgres:
+
+secrets:
+  artifactory_user:
+    file: ${ARTIFACTORY_USER_FILE:?set the Artifactory username file path}
+  artifactory_token:
+    file: ${ARTIFACTORY_TOKEN_FILE:?set the Artifactory token file path}
+  corporate_ca:
+    file: ${CORPORATE_CA_FILE:?set the corporate CA file path}
+  postgres_password:
+    file: ${MODERN_POSTGRES_PASSWORD_FILE:?set the local PostgreSQL password file path}
