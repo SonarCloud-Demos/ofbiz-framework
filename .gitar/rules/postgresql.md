@@ -78,4 +78,7 @@
   ```sql
   SET lock_timeout = '2s';
   SET statement_timeout = '5s';
+  -- For CREATE INDEX CONCURRENTLY / VALIDATE CONSTRAINT steps:
+  -- SET statement_timeout = 0;
+  ```
 
