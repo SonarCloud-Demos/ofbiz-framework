@@ -65,3 +65,41 @@ resource "azurerm_cdn_frontdoor_route" "this" {
   supported_protocols           = ["Http", "Https"]
   link_to_default_domain        = true
 }
+
+resource "azurerm_cdn_frontdoor_firewall_policy" "this" {
+  name                = replace("waf${var.name}", "-", "")
+  resource_group_name = var.resource_group_name
+  sku_name            = azurerm_cdn_frontdoor_profile.this.sku_name
+  enabled             = true
+  mode                = var.waf_mode
+  tags                = var.tags
+
+  managed_rule {
+    type    = "DefaultRuleSet"
+    version = "2.1"
+    action  = "Block"
+  }
+
+  managed_rule {
+    type    = "Microsoft_BotManagerRuleSet"
+    version = "1.1"
+    action  = "Block"
+  }
+}
+
+resource "azurerm_cdn_frontdoor_security_policy" "this" {
+  name                     = "security-${var.name}"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.this.id
+
+  security_policies {
+    firewall {
+      cdn_frontdoor_firewall_policy_id = azurerm_cdn_frontdoor_firewall_policy.this.id
+      association {
+        patterns_to_match = ["/*"]
+        domain {
+          cdn_frontdoor_domain_id = azurerm_cdn_frontdoor_endpoint.this.id
+        }
+      }
+    }
+  }
+}

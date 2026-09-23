@@ -18,3 +18,14 @@ areas:
     reviewers:
       - affected-domain-owner
       - data-owner
+  phase-2-shell-edge:
+    paths:
+      - platform/routes.yaml
+      - services/shell-bff/**
+      - web/shell/**
+      - local-dev/nginx-edge.conf
+    accountableOwner: migration-platform-team
+    reviewers:
+      - security
+      - accessibility
+      - operations

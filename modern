@@ -66,10 +66,14 @@ compose() {
 run_check() {
     require_command rg
     sh -n "$repo_root/modern" "$repo_root/platform/architecture/check.sh" \
+        "$repo_root/platform/architecture/check-phase-2.sh" \
         "$repo_root/local-dev/smoke-test.sh" "$repo_root/web/template-route/build.sh" \
-        "$repo_root/web/template-route/test.sh"
+        "$repo_root/web/template-route/test.sh" "$repo_root/web/shell/build.sh" \
+        "$repo_root/web/shell/test.sh"
     "$repo_root/platform/architecture/check.sh"
+    "$repo_root/platform/architecture/check-phase-2.sh"
     "$repo_root/web/template-route/test.sh"
+    "$repo_root/web/shell/test.sh"
     if command -v docker >/dev/null 2>&1; then
         MODERN_GRADLE_INIT_SCRIPT="$repo_root/services/template-service/settings.gradle" \
         MODERN_GRADLE_PROPERTIES="$repo_root/services/template-service/gradle.properties" \
@@ -89,15 +93,22 @@ run_build() {
     gradle_args
     GRADLE_USER_HOME="$gradle_home" "$repo_root/services/template-service/gradlew" \
         --init-script "$MODERN_GRADLE_INIT_SCRIPT" assemble
+    GRADLE_USER_HOME="$gradle_home" "$repo_root/services/shell-bff/gradlew" \
+        --init-script "$MODERN_GRADLE_INIT_SCRIPT" assemble
     "$repo_root/web/template-route/build.sh"
+    "$repo_root/web/shell/build.sh"
 }
 
 run_test() {
     gradle_args
     GRADLE_USER_HOME="$gradle_home" "$repo_root/services/template-service/gradlew" \
         --init-script "$MODERN_GRADLE_INIT_SCRIPT" test
+    GRADLE_USER_HOME="$gradle_home" "$repo_root/services/shell-bff/gradlew" \
+        --init-script "$MODERN_GRADLE_INIT_SCRIPT" test
     "$repo_root/web/template-route/test.sh"
+    "$repo_root/web/shell/test.sh"
     "$repo_root/platform/architecture/check.sh"
+    "$repo_root/platform/architecture/check-phase-2.sh"
 }
 
 if [ "$#" -eq 0 ]; then

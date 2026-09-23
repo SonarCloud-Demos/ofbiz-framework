@@ -45,6 +45,41 @@ services:
       timeout: 3s
       retries: 6
 
+  shell-bff:
+    profiles: [full]
+    build:
+      context: ..
+      dockerfile: services/shell-bff/Dockerfile
+      args:
+        JAVA_BUILD_IMAGE: ${MODERN_JAVA_BUILD_IMAGE:?set an approved build image}
+        JAVA_RUNTIME_IMAGE: ${MODERN_JAVA_RUNTIME_IMAGE:?set an approved runtime image}
+        ARTIFACTORY_MAVEN_URL: ${ARTIFACTORY_MAVEN_URL:?set the Maven repository URL}
+        ARTIFACTORY_GRADLE_PLUGIN_URL: ${ARTIFACTORY_GRADLE_PLUGIN_URL:?set the Gradle plugin repository URL}
+      secrets:
+        - artifactory_user
+        - artifactory_token
+        - corporate_ca
+    environment:
+      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:?set the local OIDC client ID}
+      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI:?set the local OIDC issuer URI}
+      ENTRA_AUTHORIZATION_URI: ${ENTRA_AUTHORIZATION_URI:?set the local OIDC authorization URI}
+      ENTRA_TOKEN_URI: ${ENTRA_TOKEN_URI:?set the local OIDC token URI}
+      ENTRA_JWK_SET_URI: ${ENTRA_JWK_SET_URI:?set the local OIDC JWK set URI}
+      ENTRA_ALLOWED_TENANTS: ${ENTRA_ALLOWED_TENANTS:?set allowed tenant IDs}
+      LEGACY_BRIDGE_AUDIENCE: ${LEGACY_BRIDGE_AUDIENCE:-ofbiz-legacy}
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+    secrets:
+      - entra_client_secret
+      - legacy_bridge_signing_key
+    depends_on:
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: [CMD, java, -version]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
   postgres:
     profiles: [core, full]
     image: ${MODERN_POSTGRES_IMAGE:?set an approved PostgreSQL image}
@@ -85,6 +120,8 @@ services:
         condition: service_healthy
       template-route:
         condition: service_healthy
+      shell-bff:
+        condition: service_healthy
       legacy-ofbiz:
         condition: service_started
     ports:
@@ -102,3 +139,7 @@ secrets:
     file: ${CORPORATE_CA_FILE:?set the corporate CA file path}
   postgres_password:
     file: ${MODERN_POSTGRES_PASSWORD_FILE:?set the local PostgreSQL password file path}
+  entra_client_secret:
+    file: ${ENTRA_CLIENT_SECRET_FILE:?set the local OIDC client secret file path}
+  legacy_bridge_signing_key:
+    file: ${LEGACY_BRIDGE_SIGNING_KEY_FILE:?set the legacy bridge signing key file path}

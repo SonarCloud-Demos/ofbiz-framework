@@ -1,3 +1,5 @@
 # One independently buildable paved-road component per line.
 services/template-service
+services/shell-bff
 web/template-route
+web/shell

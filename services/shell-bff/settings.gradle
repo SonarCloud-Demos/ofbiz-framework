@@ -1,0 +1,7 @@
+pluginManagement {
+    repositories {
+        // Supplied by the approved Gradle init script.
+    }
+}
+
+rootProject.name = 'shell-bff'
