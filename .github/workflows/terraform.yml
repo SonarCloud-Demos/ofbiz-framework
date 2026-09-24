@@ -58,6 +58,7 @@ jobs:
       TF_VAR_alert_email: ${{ vars.PLATFORM_ALERT_EMAIL }}
       TF_VAR_sample_image: ${{ vars.SAMPLE_IMAGE }}
       TF_VAR_shell_image: ${{ vars.SHELL_IMAGE }}
+      TF_VAR_legacy_origin_host: ${{ vars.LEGACY_ORIGIN_HOST }}
       TF_VAR_postgres_admin_login: ${{ secrets.POSTGRES_BOOTSTRAP_LOGIN }}
       TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_BOOTSTRAP_PASSWORD }}
     steps:
@@ -96,6 +97,7 @@ jobs:
       TF_VAR_alert_email: ${{ vars.PLATFORM_ALERT_EMAIL }}
       TF_VAR_sample_image: ${{ vars.SAMPLE_IMAGE }}
       TF_VAR_shell_image: ${{ vars.SHELL_IMAGE }}
+      TF_VAR_legacy_origin_host: ${{ vars.LEGACY_ORIGIN_HOST }}
       TF_VAR_postgres_admin_login: ${{ secrets.POSTGRES_BOOTSTRAP_LOGIN }}
       TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_BOOTSTRAP_PASSWORD }}
     steps:

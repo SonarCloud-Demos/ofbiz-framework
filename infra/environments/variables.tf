@@ -16,6 +16,13 @@ variable "alert_email" { type = string }
 variable "monthly_budget" { type = number }
 variable "sample_image" { type = string }
 variable "shell_image" { type = string }
+variable "legacy_origin_host" {
+  type = string
+  validation {
+    condition     = !can(regex("^https?://", var.legacy_origin_host)) && length(var.legacy_origin_host) > 0
+    error_message = "legacy_origin_host must be a hostname without a scheme"
+  }
+}
 variable "extra_tags" {
   type    = map(string)
   default = {}

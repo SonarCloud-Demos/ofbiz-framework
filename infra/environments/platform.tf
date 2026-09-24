@@ -54,6 +54,7 @@ module "edge" {
   apim_subnet_id           = module.network.apim_subnet_id
   container_environment_id = module.container_platform.environment_id
   shell_origin_host        = module.container_platform.shell_fqdn
+  legacy_origin_host       = var.legacy_origin_host
   tags                     = local.tags
 }
 module "platform_alerts" {

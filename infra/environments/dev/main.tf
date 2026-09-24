@@ -15,6 +15,7 @@ module "platform" {
   monthly_budget          = 500
   sample_image            = var.sample_image
   shell_image             = var.shell_image
+  legacy_origin_host      = var.legacy_origin_host
   postgres_admin_login    = var.postgres_admin_login
   postgres_admin_password = var.postgres_admin_password
 }
@@ -23,6 +24,7 @@ variable "tenant_id" { type = string }
 variable "alert_email" { type = string }
 variable "sample_image" { type = string }
 variable "shell_image" { type = string }
+variable "legacy_origin_host" { type = string }
 variable "postgres_admin_login" { type = string }
 variable "postgres_admin_password" {
   type      = string

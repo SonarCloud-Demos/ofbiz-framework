@@ -1,0 +1,13 @@
+openapi: 3.1.0
+info: {title: OFBiz transitional adapter, version: 0.1.0}
+paths:
+  /legacy-session:
+    get:
+      summary: Redeem a single-use identity exchange and establish a proxied OFBiz session
+      parameters:
+        - {name: code, in: query, required: true, schema: {type: string}}
+        - {name: return, in: query, required: false, schema: {type: string, default: /webtools/control/main}}
+      responses:
+        '302': {description: Session established; redirect beneath /legacy/}
+        '401': {description: Invalid or previously redeemed exchange}
+        '502': {description: Sanitized legacy dependency failure}

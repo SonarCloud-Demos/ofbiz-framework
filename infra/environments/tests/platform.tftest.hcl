@@ -16,6 +16,7 @@ variables {
   monthly_budget          = 500
   sample_image            = "example.invalid/platform-sample@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   shell_image             = "example.invalid/web-shell@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  legacy_origin_host      = "legacy.example.invalid"
   postgres_admin_login    = "bootstrapadmin"
   postgres_admin_password = "Not-A-Real-Password-For-Mocked-Tests!"
 }

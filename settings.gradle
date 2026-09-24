@@ -66,3 +66,6 @@ activeComponents().each { File component ->
 // Phase 1 modern modules are explicit so source cannot silently fall outside
 // the authoritative root Gradle graph.
 include ':services:platform-sample'
+include ':services:shell-bff'
+include ':services:identity-access'
+include ':services:ofbiz-adapter'

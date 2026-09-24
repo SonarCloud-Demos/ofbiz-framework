@@ -82,10 +82,60 @@ services:
     depends_on:
       database-policy: {condition: service_healthy}
       messaging: {condition: service_healthy}
+  shell-bff:
+    build:
+      context: ../services/shell-bff
+    environment:
+      PLATFORM_SERVICE_URL: http://platform-sample:8081/api/platform
+      TRUSTED_HOSTS: localhost
+      OIDC_AUTHORIZATION_ENDPOINT: http://localhost:8180/realms/ofbiz-development/protocol/openid-connect/auth
+      OIDC_TOKEN_ENDPOINT: http://identity:8080/realms/ofbiz-development/protocol/openid-connect/token
+      OIDC_USERINFO_ENDPOINT: http://identity:8080/realms/ofbiz-development/protocol/openid-connect/userinfo
+      OIDC_CLIENT_ID: modern-shell
+      OIDC_REDIRECT_URI: http://localhost:8080/auth/callback
+      COOKIE_SECURE: "false"
+      PLATFORM_ROUTE_PERCENT: "100"
+      PLATFORM_ROUTE_DISABLED: "false"
+      IDENTITY_EXCHANGE_URL: http://identity-access:8083/internal/exchanges
+      WORKLOAD_TOKEN: local-workload-token-local-workload-token-local-workload-token-1234567890
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/health/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      platform-sample: {condition: service_healthy}
+      identity: {condition: service_healthy}
+      identity-access: {condition: service_healthy}
+  identity-access:
+    build:
+      context: ../services/identity-access
+    environment:
+      WORKLOAD_TOKEN: local-workload-token-local-workload-token-local-workload-token-1234567890
+      IDENTITY_MAPPINGS: '{"11111111-1111-1111-1111-111111111111":{"principalId":"local-developer","partyId":"admin","userLoginId":"admin"}}'
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8083/health/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+  ofbiz-adapter:
+    build:
+      context: ../services/ofbiz-adapter
+    environment:
+      IDENTITY_EXCHANGE_URL: http://identity-access:8083/internal/exchanges
+      OFBIZ_ORIGIN: http://shell:8080/legacy
+      WORKLOAD_TOKEN: local-workload-token-local-workload-token-local-workload-token-1234567890
+      OFBIZ_JWT_KEY: local-ofbiz-jwt-key-local-ofbiz-jwt-key-local-ofbiz-jwt-key-1234567890
+    depends_on:
+      identity-access: {condition: service_healthy}
+      legacy-ofbiz: {condition: service_healthy}
   legacy-ofbiz:
     build:
       context: ..
       target: demo
+    environment:
+      OFBIZ_LEGACY_EXCHANGE_ENABLED: "true"
+      OFBIZ_LEGACY_EXCHANGE_KEY: local-ofbiz-jwt-key-local-ofbiz-jwt-key-local-ofbiz-jwt-key-1234567890
     healthcheck:
       test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://localhost:8443/webtools/control/main"]
       interval: 10s
@@ -97,7 +147,8 @@ services:
       context: ../web/shell
     ports: ["8080:8080"]
     depends_on:
-      platform-sample: {condition: service_healthy}
+      shell-bff: {condition: service_healthy}
+      ofbiz-adapter: {condition: service_started}
       legacy-ofbiz: {condition: service_healthy}
       identity: {condition: service_healthy}
     healthcheck:

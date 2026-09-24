@@ -6,6 +6,7 @@ variable "alert_email" { type = string }
 variable "apim_subnet_id" { type = string }
 variable "container_environment_id" { type = string }
 variable "shell_origin_host" { type = string }
+variable "legacy_origin_host" { type = string }
 variable "tags" { type = map(string) }
 resource "azurerm_api_management" "this" {
   name                          = "${var.name}-apim"
@@ -85,6 +86,44 @@ resource "azurerm_cdn_frontdoor_route" "shell" {
   cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.this.id
   cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.shell.id
   cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.shell.id]
+  enabled                       = true
+  forwarding_protocol           = "HttpsOnly"
+  https_redirect_enabled        = true
+  patterns_to_match             = ["/modern/*", "/auth/*", "/bff/*", "/legacy-session", "/route-manifest.json", "/app.js", "/styles.css"]
+  supported_protocols           = ["Http", "Https"]
+  link_to_default_domain        = true
+}
+resource "azurerm_cdn_frontdoor_origin_group" "legacy" {
+  name                     = "legacy"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.this.id
+  session_affinity_enabled = false
+  health_probe {
+    interval_in_seconds = 30
+    path                = "/webtools/control/main"
+    protocol            = "Https"
+    request_type        = "HEAD"
+  }
+  load_balancing {
+    additional_latency_in_milliseconds = 50
+    sample_size                        = 4
+    successful_samples_required        = 3
+  }
+}
+resource "azurerm_cdn_frontdoor_origin" "legacy" {
+  name                           = "legacy"
+  cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.legacy.id
+  enabled                        = true
+  host_name                      = var.legacy_origin_host
+  origin_host_header             = var.legacy_origin_host
+  certificate_name_check_enabled = true
+  http_port                      = 80
+  https_port                     = 443
+}
+resource "azurerm_cdn_frontdoor_route" "legacy_default" {
+  name                          = "legacy-default"
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.this.id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.legacy.id
+  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.legacy.id]
   enabled                       = true
   forwarding_protocol           = "HttpsOnly"
   https_redirect_enabled        = true

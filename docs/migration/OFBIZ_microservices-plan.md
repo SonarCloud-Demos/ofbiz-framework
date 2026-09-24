@@ -348,6 +348,8 @@ Exit criteria:
 
 **Goal:** introduce the seam that permits safe route-by-route replacement.
 
+**Status:** Complete on 2026-09-24. Repository implementation and local verification passed. Azure/Entra deployment evidence was explicitly waived by project decision on 2026-09-24 and is not represented as successfully exercised. See `docs/migration/phase3/`.
+
 Work:
 
 - place the current OFBiz deployment behind Front Door as the default/fallback origin while preserving public URLs and redirects;
