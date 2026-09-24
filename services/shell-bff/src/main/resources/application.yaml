@@ -37,6 +37,12 @@ legacy-bridge:
 identity:
   allowed-tenants: ${ENTRA_ALLOWED_TENANTS}
   expected-issuer: ${ENTRA_ISSUER_URI}
+security:
+  cookies:
+    secure: ${SECURITY_COOKIE_SECURE:true}
+    csrf-name: ${SECURITY_CSRF_COOKIE_NAME:__Host-XSRF-TOKEN}
+catalog-service:
+  base-url: ${CATALOG_SERVICE_BASE_URL:http://localhost:8083}
 management:
   endpoint:
     health:

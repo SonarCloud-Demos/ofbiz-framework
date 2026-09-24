@@ -1,6 +1,11 @@
 version: 1
 defaultOwner: legacy-ofbiz
 routes:
+  - id: catalog-products
+    pathPrefix: /catalog/products
+    owner: product-catalog-service
+    generation: hybrid
+    authentication: entra-bff-session-catalog-role
   - id: modern-shell
     pathPrefix: /modern/
     owner: modern-shell

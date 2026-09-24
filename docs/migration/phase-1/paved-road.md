@@ -20,7 +20,9 @@ Keep credentials and trust material outside the repository as described in
 ./modern build
 ./modern test
 ./modern up
+./modern seed
 ./modern smoke
+./modern login-smoke
 ./modern down
 ```
 
@@ -42,6 +44,14 @@ on the complete test lifecycle and includes the modern services' compiled main
 and test bytecode plus web, platform, infrastructure, local-development and
 migration sources. A globally installed approved init script may omit the
 explicit `--init-script` argument.
+
+The full Compose profile starts a digest-pinned Keycloak development provider.
+It imports `local-dev/keycloak/ofbiz-local-realm.json` with `catalog` / `catalog`
+(`CATALOG`, `LEGACY_USER`) and `viewer` / `viewer` (`LEGACY_USER` only).
+`login-smoke` exercises authorization-code login and proves the catalog user
+can call the role-protected BFF API. The provider, credentials and HTTP-cookie
+profile are local-development assets only; deployed environments continue to
+use Entra and secure `__Host-` cookies.
 
 ```sh
 export MODERN_GRADLE_INIT_SCRIPT="$PWD/gradle/modern-artifactory.init.gradle"

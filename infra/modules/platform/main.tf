@@ -331,3 +331,133 @@ resource "azurerm_consumption_budget_resource_group" "this" {
   }
   lifecycle { ignore_changes = [time_period] }
 }
+
+# Phase 3 product-catalog pilot. Database role creation/grants are performed by
+# the controlled migration job documented in the Phase 3 runbook; Terraform
+# owns the database, workload identity and runtime only.
+resource "azurerm_postgresql_flexible_server_database" "product_catalog" {
+  name      = "product_catalog"
+  server_id = azurerm_postgresql_flexible_server.this.id
+  charset   = "UTF8"
+  collation = "en_US.utf8"
+}
+
+resource "azurerm_user_assigned_identity" "product_catalog" {
+  name                = "id-${var.name}-${var.environment}-product-catalog"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = local.tags
+}
+
+resource "azurerm_container_app" "product_catalog" {
+  name                         = "ca-product-catalog"
+  container_app_environment_id = azurerm_container_app_environment.this.id
+  resource_group_name          = azurerm_resource_group.this.name
+  revision_mode                = "Multiple"
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.product_catalog.id]
+  }
+  registry {
+    server   = azurerm_container_registry.this.login_server
+    identity = azurerm_user_assigned_identity.product_catalog.id
+  }
+  secret {
+    name  = "database-password"
+    value = var.catalog_database_password
+  }
+  secret {
+    name  = "ingestion-key"
+    value = var.catalog_ingestion_key
+  }
+  secret {
+    name  = "legacy-export-key"
+    value = var.catalog_legacy_export_key
+  }
+  ingress {
+    external_enabled = false
+    target_port      = 8080
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+  template {
+    min_replicas = 1
+    max_replicas = 3
+    container {
+      name   = "product-catalog-service"
+      image  = var.product_catalog_service_image
+      cpu    = 0.5
+      memory = "1Gi"
+      env {
+        name  = "CATALOG_DATABASE_URL"
+        value = "jdbc:postgresql://${azurerm_postgresql_flexible_server.this.fqdn}:5432/${azurerm_postgresql_flexible_server_database.product_catalog.name}?sslmode=require"
+      }
+      env {
+        name  = "CATALOG_DATABASE_USER"
+        value = var.catalog_database_user
+      }
+      env {
+        name        = "CATALOG_DATABASE_PASSWORD"
+        secret_name = "database-password"
+      }
+      env {
+        name        = "CATALOG_INGESTION_KEY"
+        secret_name = "ingestion-key"
+      }
+      env {
+        name        = "CATALOG_LEGACY_EXPORT_KEY"
+        secret_name = "legacy-export-key"
+      }
+      env {
+        name  = "CATALOG_LEGACY_SYNC_ENABLED"
+        value = "true"
+      }
+      env {
+        name  = "CATALOG_LEGACY_BASE_URL"
+        value = var.legacy_ofbiz_internal_url
+      }
+      env {
+        name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
+        value = azurerm_application_insights.this.connection_string
+      }
+      liveness_probe {
+        transport = "HTTP"
+        port      = 8080
+        path      = "/actuator/health/liveness"
+      }
+      readiness_probe {
+        transport = "HTTP"
+        port      = 8080
+        path      = "/actuator/health/readiness"
+      }
+    }
+  }
+  tags = local.tags
+}
+
+resource "azurerm_role_assignment" "catalog_acr_pull" {
+  scope                = azurerm_container_registry.this.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.product_catalog.principal_id
+}
+
+resource "azurerm_monitor_metric_alert" "catalog_restarts" {
+  name                = "product-catalog-restarts"
+  resource_group_name = azurerm_resource_group.this.name
+  scopes              = [azurerm_container_app.product_catalog.id]
+  description         = "Product catalog service restarted unexpectedly"
+  severity            = 2
+  frequency           = "PT5M"
+  window_size         = "PT15M"
+  criteria {
+    metric_namespace = "Microsoft.App/containerApps"
+    metric_name      = "RestartCount"
+    aggregation      = "Total"
+    operator         = "GreaterThan"
+    threshold        = 0
+  }
+  action { action_group_id = azurerm_monitor_action_group.platform.id }
+  tags = local.tags
+}

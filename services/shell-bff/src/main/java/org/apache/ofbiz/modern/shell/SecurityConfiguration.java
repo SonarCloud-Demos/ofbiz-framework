@@ -34,19 +34,24 @@ import org.springframework.http.HttpStatus;
 
 @Configuration
 public class SecurityConfiguration {
+    private final boolean secureCookies;
+    private final String csrfCookieName;
+    private final String sessionCookieName;
+
     @Bean
     @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         var csrf = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        csrf.setCookieName("__Host-XSRF-TOKEN");
+        csrf.setCookieName(csrfCookieName);
         csrf.setHeaderName("X-XSRF-TOKEN");
         csrf.setCookiePath("/");
-        csrf.setCookieCustomizer(cookie -> cookie.secure(true).sameSite("Strict"));
+        csrf.setCookieCustomizer(cookie -> cookie.secure(secureCookies).sameSite("Strict"));
 
         http
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health/**", "/error").permitAll()
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                        .requestMatchers("/bff/catalog/**").hasRole("CATALOG")
                         .requestMatchers("/modern/**", "/bff/**").authenticated()
                         .anyRequest().denyAll())
                 .oauth2Login(oauth -> oauth
@@ -64,7 +69,7 @@ public class SecurityConfiguration {
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT))
                         .invalidateHttpSession(true)
                         .clearAuthentication(true)
-                        .deleteCookies("__Host-OFBIZ_SESSION", "__Host-XSRF-TOKEN"))
+                        .deleteCookies(sessionCookieName, csrfCookieName))
                 .headers(headers -> headers
                         .contentSecurityPolicy(csp -> csp.policyDirectives(
                                 "default-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; "
@@ -89,12 +94,18 @@ public class SecurityConfiguration {
 
     public SecurityConfiguration(
             ClientRegistrationRepository registrations,
-            TenantValidatedOidcUserService oidcUserService) {
+            TenantValidatedOidcUserService oidcUserService,
+            @Value("${security.cookies.secure:true}") boolean secureCookies,
+            @Value("${security.cookies.csrf-name:__Host-XSRF-TOKEN}") String csrfCookieName,
+            @Value("${server.servlet.session.cookie.name:__Host-OFBIZ_SESSION}") String sessionCookieName) {
         var resolver = new DefaultOAuth2AuthorizationRequestResolver(
                 registrations, "/oauth2/authorization");
         resolver.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
         this.authorizationRequestResolver = resolver;
         this.oidcUserService = oidcUserService;
+        this.secureCookies = secureCookies;
+        this.csrfCookieName = csrfCookieName;
+        this.sessionCookieName = sessionCookieName;
     }
 
     @Bean

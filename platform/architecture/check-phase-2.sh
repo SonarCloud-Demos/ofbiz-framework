@@ -35,3 +35,9 @@ rg -q 'Duration.ofSeconds\(60\)' services/shell-bff/src/main/java/org/apache/ofb
 rg -q 'internal;' local-dev/nginx-edge.conf
 rg -q 'auth_request /__auth/legacy' local-dev/nginx-edge.conf
 rg -q 'proxy_set_header X-Legacy-Identity-Assertion \$legacy_assertion' local-dev/nginx-edge.conf
+rg -q 'local-oidc:' local-dev/docker-compose.yml
+rg -q 'MODERN_OIDC_IMAGE.*@sha256:' local-dev/images.env.example
+rg -q '"name": "application roles"' local-dev/keycloak/ofbiz-local-realm.json
+rg -q 'SECURITY_COOKIE_SECURE: "false"' local-dev/docker-compose.yml
+test -x local-dev/login-smoke-test.sh
+rg -q 'X-Forwarded-Host \$http_host' local-dev/nginx-edge.conf

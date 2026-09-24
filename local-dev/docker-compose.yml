@@ -60,20 +60,81 @@ services:
         - artifactory_token
         - corporate_ca
     environment:
-      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:?set the local OIDC client ID}
-      ENTRA_ISSUER_URI: ${ENTRA_ISSUER_URI:?set the local OIDC issuer URI}
-      ENTRA_AUTHORIZATION_URI: ${ENTRA_AUTHORIZATION_URI:?set the local OIDC authorization URI}
-      ENTRA_TOKEN_URI: ${ENTRA_TOKEN_URI:?set the local OIDC token URI}
-      ENTRA_JWK_SET_URI: ${ENTRA_JWK_SET_URI:?set the local OIDC JWK set URI}
-      ENTRA_ALLOWED_TENANTS: ${ENTRA_ALLOWED_TENANTS:?set allowed tenant IDs}
+      ENTRA_CLIENT_ID: shell-bff
+      ENTRA_CLIENT_SECRET: local-shell-bff-secret
+      ENTRA_ISSUER_URI: http://localhost:18084/realms/ofbiz-local
+      ENTRA_AUTHORIZATION_URI: http://localhost:18084/realms/ofbiz-local/protocol/openid-connect/auth
+      ENTRA_TOKEN_URI: http://local-oidc:8080/realms/ofbiz-local/protocol/openid-connect/token
+      ENTRA_JWK_SET_URI: http://local-oidc:8080/realms/ofbiz-local/protocol/openid-connect/certs
+      ENTRA_ALLOWED_TENANTS: local-tenant
       LEGACY_BRIDGE_AUDIENCE: ${LEGACY_BRIDGE_AUDIENCE:-ofbiz-legacy}
+      LEGACY_BRIDGE_SIGNING_KEY: local-legacy-bridge-signing-key-32-bytes
+      SECURITY_COOKIE_SECURE: "false"
+      SECURITY_CSRF_COOKIE_NAME: XSRF-TOKEN
+      SERVER_SERVLET_SESSION_COOKIE_NAME: OFBIZ_SESSION
+      SERVER_SERVLET_SESSION_COOKIE_SECURE: "false"
+      CATALOG_SERVICE_BASE_URL: http://product-catalog-service:8080
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
-    secrets:
-      - entra_client_secret
-      - legacy_bridge_signing_key
     depends_on:
       otel-collector:
         condition: service_started
+      local-oidc:
+        condition: service_started
+      product-catalog-service:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, java, -version]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  local-oidc:
+    profiles: [full]
+    image: ${MODERN_OIDC_IMAGE:-quay.io/keycloak/keycloak:26.3.5@sha256:357829ec7c4693397533035092ad13b0644bcc95ded311f33a3738c4d9e9bdba}
+    command:
+      - start-dev
+      - --import-realm
+      - --hostname=http://localhost:18084
+      - --hostname-backchannel-dynamic=true
+    environment:
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/ofbiz-local-realm.json:/opt/keycloak/data/import/ofbiz-local-realm.json:ro
+    ports:
+      - "18084:8080"
+
+  product-catalog-service:
+    profiles: [core, full]
+    build:
+      context: ..
+      dockerfile: services/product-catalog-service/Dockerfile
+      args:
+        JAVA_BUILD_IMAGE: ${MODERN_JAVA_BUILD_IMAGE:?set an approved build image}
+        JAVA_RUNTIME_IMAGE: ${MODERN_JAVA_RUNTIME_IMAGE:?set an approved runtime image}
+        ARTIFACTORY_MAVEN_URL: ${ARTIFACTORY_MAVEN_URL:?set the Maven repository URL}
+        ARTIFACTORY_GRADLE_PLUGIN_URL: ${ARTIFACTORY_GRADLE_PLUGIN_URL:?set the Gradle plugin repository URL}
+      secrets:
+        - artifactory_user
+        - artifactory_token
+        - corporate_ca
+    environment:
+      CATALOG_DATABASE_URL: jdbc:postgresql://catalog-postgres:5432/product_catalog
+      CATALOG_DATABASE_USER: product_catalog
+      CATALOG_INGESTION_KEY: local-catalog-ingestion
+      CATALOG_LEGACY_SYNC_ENABLED: "true"
+      CATALOG_LEGACY_BASE_URL: http://legacy-ofbiz:8080
+      CATALOG_LEGACY_EXPORT_KEY: local-catalog-export
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+    secrets:
+      - source: catalog_postgres_password
+        target: catalog-postgres-password
+    depends_on:
+      catalog-postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    ports:
+      - "18083:8080"
     healthcheck:
       test: [CMD, java, -version]
       interval: 10s
@@ -97,6 +158,24 @@ services:
       timeout: 3s
       retries: 12
 
+  catalog-postgres:
+    profiles: [core, full]
+    image: ${MODERN_POSTGRES_IMAGE:?set an approved PostgreSQL image}
+    environment:
+      POSTGRES_DB: product_catalog
+      POSTGRES_USER: product_catalog
+      POSTGRES_PASSWORD_FILE: /run/secrets/catalog-postgres-password
+    secrets:
+      - source: catalog_postgres_password
+        target: catalog-postgres-password
+    volumes:
+      - catalog-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U product_catalog -d product_catalog]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   otel-collector:
     profiles: [core, full]
     image: ${MODERN_OTEL_COLLECTOR_IMAGE:?set an approved OpenTelemetry image}
@@ -106,7 +185,13 @@ services:
 
   legacy-ofbiz:
     profiles: [full]
-    image: ${MODERN_OFBIZ_IMAGE:?set an approved OFBiz image}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: demo
+    image: ofbiz-modern-legacy:phase3
+    environment:
+      OFBIZ_CATALOG_EXPORT_KEY: local-catalog-export
     ports:
       - "18443:8443"
 
@@ -129,6 +214,7 @@ services:
 
 volumes:
   template-postgres:
+  catalog-postgres:
 
 secrets:
   artifactory_user:
@@ -139,7 +225,5 @@ secrets:
     file: ${CORPORATE_CA_FILE:?set the corporate CA file path}
   postgres_password:
     file: ${MODERN_POSTGRES_PASSWORD_FILE:?set the local PostgreSQL password file path}
-  entra_client_secret:
-    file: ${ENTRA_CLIENT_SECRET_FILE:?set the local OIDC client secret file path}
-  legacy_bridge_signing_key:
-    file: ${LEGACY_BRIDGE_SIGNING_KEY_FILE:?set the legacy bridge signing key file path}
+  catalog_postgres_password:
+    file: ${MODERN_CATALOG_POSTGRES_PASSWORD_FILE:-${MODERN_POSTGRES_PASSWORD_FILE:?set the catalog or shared local PostgreSQL password file path}}

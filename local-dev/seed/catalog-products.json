@@ -1,0 +1,12 @@
+[
+  {
+    "productId": "PHASE3-DEMO-1",
+    "internalName": "Phase 3 demonstration product",
+    "productName": "Modern catalog demo",
+    "productTypeId": "FINISHED_GOOD",
+    "statusId": "PRODUCT_ACTIVE",
+    "description": "Local-only projection record for exercising the Phase 3 UI.",
+    "sourceUpdatedAt": "2026-09-24T00:00:00Z",
+    "sourceChecksum": "f20fb8890fd39c4e28ec10b706f4c6833aaaefab74a0a34a39d1f93090f15e38"
+  }
+]

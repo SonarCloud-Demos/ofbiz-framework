@@ -2,6 +2,7 @@ output "resource_group_name" { value = azurerm_resource_group.this.name }
 output "container_registry" { value = azurerm_container_registry.this.login_server }
 output "container_app_environment_id" { value = azurerm_container_app_environment.this.id }
 output "template_service_name" { value = azurerm_container_app.template.name }
+output "product_catalog_service_name" { value = azurerm_container_app.product_catalog.name }
 output "workload_identity_client_id" { value = azurerm_user_assigned_identity.workload.client_id }
 output "key_vault_uri" { value = azurerm_key_vault.this.vault_uri }
 output "servicebus_namespace" { value = azurerm_servicebus_namespace.this.name }

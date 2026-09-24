@@ -29,3 +29,14 @@ areas:
       - security
       - accessibility
       - operations
+  product-catalog-pilot:
+    paths:
+      - services/product-catalog-service/**
+      - platform/contracts/http/product-catalog-v1.yaml
+      - docs/migration/phase-3/**
+    accountableOwner: catalog-domain-owner
+    reviewers:
+      - product-owner
+      - data-owner
+      - security
+      - operations

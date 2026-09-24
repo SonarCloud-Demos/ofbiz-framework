@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 
 import java.nio.charset.StandardCharsets;
 import javax.crypto.spec.SecretKeySpec;
@@ -56,11 +57,24 @@ class ShellBffSecurityTest {
     }
 
     @Test
+    void authenticatedUserCanRenderShellEntryPoint() throws Exception {
+        mvc.perform(get("/modern/").with(oidcLogin()))
+                .andExpect(status().isOk())
+                .andExpect(forwardedUrl("/modern/index.html"));
+    }
+
+    @Test
     void unsafeRequestRequiresCsrfAndLegacyRole() throws Exception {
         var legacyUser = oidcLogin().authorities(new SimpleGrantedAuthority("ROLE_LEGACY_USER"));
         mvc.perform(post("/bff/logout").with(legacyUser))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/bff/internal/legacy-assertion").with(oidcLogin()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void catalogApiRequiresCatalogRole() throws Exception {
+        mvc.perform(get("/bff/catalog/products").with(oidcLogin()))
                 .andExpect(status().isForbidden());
     }
 

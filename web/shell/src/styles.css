@@ -6,5 +6,13 @@ header button { color: white; background: transparent; border: 1px solid current
 [data-generation] { margin-left: auto; padding: .2rem .55rem; border: 1px solid currentColor; border-radius: 1rem; font-size: .8rem; }
 main { max-width: 70rem; margin: 2rem auto; padding: 0 1.25rem; }
 .notice { border-left: .3rem solid #276ef1; background: white; padding: 1rem; }
+#catalog-search { display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; }
+#catalog-search label { width: 100%; font-weight: 700; }
+#catalog-search input { min-width: 20rem; padding: .55rem; }
+#catalog-search button, #catalog-results button { padding: .55rem .8rem; }
+#catalog-results { padding: 0; list-style: none; }
+#catalog-results li { margin: .5rem 0; }
+#catalog-results button { width: 100%; text-align: left; background: white; border: 1px solid #ccd5df; }
+#catalog-detail { margin-top: 1rem; padding: 1rem; background: white; }
 #shell-error { max-width: 70rem; margin: 1rem auto; padding: 1rem; color: #8a1c1c; background: #fff0f0; }
 :focus-visible { outline: .2rem solid #ffbf47; outline-offset: .2rem; }
