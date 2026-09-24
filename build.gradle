@@ -60,7 +60,6 @@ sonar {
                 'applications',
                 'framework',
                 'themes',
-                'services',
                 'web',
                 'contracts',
                 'infra',
