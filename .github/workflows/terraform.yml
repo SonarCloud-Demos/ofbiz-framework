@@ -1,0 +1,125 @@
+name: Terraform platform
+
+on:
+  pull_request:
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to apply
+        required: true
+        type: choice
+        options: [dev, staging]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Format
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace hashicorp/terraform:1.13.3 fmt -check -recursive infra
+      - name: Validate bootstrap
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace/infra/bootstrap hashicorp/terraform:1.13.3 init -backend=false
+          docker run --rm -v "$PWD:/workspace" -w /workspace/infra/bootstrap hashicorp/terraform:1.13.3 validate
+      - name: Validate environments
+        run: |
+          for root in dev staging ephemeral; do
+            docker run --rm -v "$PWD:/workspace" -w "/workspace/infra/environments/$root" hashicorp/terraform:1.13.3 init -backend=false
+            docker run --rm -v "$PWD:/workspace" -w "/workspace/infra/environments/$root" hashicorp/terraform:1.13.3 validate
+          done
+      - name: Run mocked Terraform tests
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace/infra/environments hashicorp/terraform:1.13.3 init -backend=false
+          docker run --rm -v "$PWD:/workspace" -w /workspace/infra/environments hashicorp/terraform:1.13.3 test
+      - name: IaC security scan
+        run: docker run --rm -v "$PWD:/src" aquasec/trivy:0.67.2 config --exit-code 1 --severity HIGH,CRITICAL /src/infra
+      - name: Terraform lint
+        run: docker run --rm -v "$PWD:/data" ghcr.io/terraform-linters/tflint@sha256:2c23953d05388157922a76be1a5a767ff719cba029e026914f92604e665b0d31 --chdir=/data/infra/environments --recursive
+      - name: Platform policy
+        run: docker run --rm -v "$PWD:/workspace" openpolicyagent/opa@sha256:bd7e1216865884be8095726fb80282ece2f6b531883bc86f9f8917f2fc52de61 eval --fail-defined --data /workspace/infra/policy/phase2.rego --input /workspace/infra/policy/ci-input.json 'data.ofbiz.terraform.phase2.deny[_]'
+
+  plan:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: static-checks
+    runs-on: ubuntu-latest
+    environment: azure-dev
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+      TF_VAR_alert_email: ${{ vars.PLATFORM_ALERT_EMAIL }}
+      TF_VAR_sample_image: ${{ vars.SAMPLE_IMAGE }}
+      TF_VAR_shell_image: ${{ vars.SHELL_IMAGE }}
+      TF_VAR_postgres_admin_login: ${{ secrets.POSTGRES_BOOTSTRAP_LOGIN }}
+      TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_BOOTSTRAP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.13.3
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Create retained plan
+        working-directory: infra/environments/dev
+        run: |
+          terraform init -input=false -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" -backend-config="container_name=tfstate"
+          terraform plan -input=false -out=platform.tfplan
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dev-platform-plan-${{ github.sha }}
+          path: infra/environments/dev/platform.tfplan
+          retention-days: 14
+
+  apply:
+    if: github.event_name == 'workflow_dispatch'
+    needs: static-checks
+    runs-on: ubuntu-latest
+    environment: azure-${{ inputs.environment }}
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+      TF_VAR_alert_email: ${{ vars.PLATFORM_ALERT_EMAIL }}
+      TF_VAR_sample_image: ${{ vars.SAMPLE_IMAGE }}
+      TF_VAR_shell_image: ${{ vars.SHELL_IMAGE }}
+      TF_VAR_postgres_admin_login: ${{ secrets.POSTGRES_BOOTSTRAP_LOGIN }}
+      TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_BOOTSTRAP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.13.3
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Initialize
+        working-directory: infra/environments/${{ inputs.environment }}
+        run: |
+          terraform init -input=false -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" -backend-config="container_name=tfstate"
+      - name: Create approved commit plan
+        working-directory: infra/environments/${{ inputs.environment }}
+        run: terraform plan -input=false -out=platform.tfplan
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ inputs.environment }}-platform-applied-plan-${{ github.sha }}
+          path: infra/environments/${{ inputs.environment }}/platform.tfplan
+          retention-days: 90
+      - name: Apply retained plan
+        working-directory: infra/environments/${{ inputs.environment }}
+        run: terraform apply -input=false platform.tfplan

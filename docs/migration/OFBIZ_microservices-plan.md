@@ -322,6 +322,8 @@ Exit criteria:
 
 **Goal:** create reproducible, secure non-production infrastructure and promotion pipelines.
 
+**Status:** Repository implementation complete on 2026-09-24. Azure acceptance is explicitly deferred because no Azure subscription or infrastructure is available; no cloud resource, deployment, recovery exercise, or Phase 2 Azure exit criterion is claimed as verified. See `docs/migration/phase2/`.
+
 Work:
 
 - implement a one-time Terraform bootstrap for remote state in Azure Storage with versioning, locking, RBAC, soft delete, and separate state per environment/component;

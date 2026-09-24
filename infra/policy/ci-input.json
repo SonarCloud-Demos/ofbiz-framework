@@ -1,0 +1,5 @@
+{
+  "environment": "dev",
+  "production_gate_approved": false,
+  "long_lived_client_secret": false
+}

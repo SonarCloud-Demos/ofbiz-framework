@@ -49,6 +49,21 @@ tasks.register('modernInfraCheck') {
             assert !it.text.contains('\t'): "${it} contains tabs"
         }
         assert file('infra/.terraform-version').text.trim() == '1.13.3'
+        ['bootstrap', 'environments/dev', 'environments/staging', 'environments/ephemeral'].each { root ->
+            assert file("infra/${root}").exists(): "Terraform root ${root} is missing"
+        }
+        def infrastructure = fileTree('infra').matching { include '**/*.tf' }.files*.text.join('\n')
+        ['azurerm_private_endpoint', 'azurerm_cdn_frontdoor_firewall_policy',
+         'azurerm_cdn_frontdoor_route', 'azurerm_cdn_frontdoor_security_policy',
+         'azurerm_monitor_metric_alert', 'azurerm_consumption_budget_resource_group',
+         'azurerm_container_app" "shell', 'use_oidc'].each {
+            assert infrastructure.contains(it): "Phase 2 infrastructure control ${it} is missing"
+        }
+        assert !infrastructure.contains('client_secret'): 'Terraform must use workload identity, not client secrets'
+        assert file('infra/environments/tests/platform.tftest.hcl').text.contains('mock_provider "azurerm"')
+        assert file('infra/policy/ci-input.json').text.contains('"long_lived_client_secret": false')
+        assert file('.github/workflows/ephemeral-environment.yml').text.contains('ttl-cleanup:')
+        assert file('docs/migration/phase2/azure-acceptance.md').text.contains('no Azure infrastructure is available')
     }
 }
 
