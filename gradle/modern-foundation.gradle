@@ -2,7 +2,8 @@ import groovy.json.JsonSlurper
 
 def modernSourceRoots = [
         'services/platform-sample', 'services/shell-bff', 'services/identity-access',
-        'services/ofbiz-adapter', 'web/shell', 'web/routes/platform-test',
+        'services/ofbiz-adapter', 'services/product-catalog-service',
+        'web/shell', 'web/routes/platform-test', 'web/routes/product-catalog',
         'web/packages/design-system', 'contracts/openapi', 'contracts/events',
         'infra/bootstrap', 'infra/modules', 'infra/environments', 'local-dev'
 ] as Set
@@ -38,6 +39,11 @@ tasks.register('modernContractCheck') {
         assert api.contains('openapi: 3.1.0') && api.contains('/health/ready:')
         def adapterApi = file('contracts/openapi/ofbiz-adapter.yaml').text
         assert adapterApi.contains('/legacy-session:') && !adapterApi.contains('entityName')
+        def catalogApi = file('contracts/openapi/product-catalog.yaml').text
+        assert catalogApi.contains('/api/catalog/v1/categories/{categoryId}:')
+        assert catalogApi.contains('/api/catalog/v1/search:')
+        def catalogIngestionApi = file('contracts/openapi/product-catalog-ingestion.yaml').text
+        assert catalogIngestionApi.contains('/internal/catalog/projection/batches:')
         def event = new JsonSlurper().parse(file('contracts/events/platform-sample.schema.json'))
         assert event.'$schema' && event.type == 'object'
         assert event.required.containsAll(['id', 'occurredAt', 'type'])
@@ -78,7 +84,7 @@ tasks.register('modernLocalDevCheck') {
     inputs.files('local-dev/compose.yaml', 'local-dev/fixtures/platform.json')
     doLast {
         def compose = file('local-dev/compose.yaml').text
-        ['shell', 'shell-bff', 'identity-access', 'ofbiz-adapter', 'platform-sample', 'legacy-ofbiz', 'postgres', 'database-policy', 'messaging',
+        ['shell', 'shell-bff', 'identity-access', 'ofbiz-adapter', 'product-catalog', 'platform-sample', 'legacy-ofbiz', 'postgres', 'database-policy', 'messaging',
          'storage', 'identity', 'telemetry'].each {
             assert compose.contains("  ${it}:"): "Compose service ${it} is missing"
         }
@@ -100,7 +106,7 @@ tasks.register('verifyModernBuildRegistration') {
         }?.each {
             candidates << "services/${it.name}"
         }
-        ['web/shell', 'web/routes/platform-test', 'web/packages/design-system',
+        ['web/shell', 'web/routes/platform-test', 'web/routes/product-catalog', 'web/packages/design-system',
          'contracts/openapi', 'contracts/events', 'infra/bootstrap', 'infra/modules',
          'infra/environments', 'local-dev'].each { if (file(it).exists()) candidates << it }
         def missing = candidates.findAll { !modernSourceRoots.contains(it.toString()) }
@@ -110,11 +116,11 @@ tasks.register('verifyModernBuildRegistration') {
 
 tasks.named('check') {
     dependsOn ':services:platform-sample:check', ':services:shell-bff:check', ':services:identity-access:check',
-            ':services:ofbiz-adapter:check', modernWebCheck, modernContractCheck,
+            ':services:ofbiz-adapter:check', ':services:product-catalog-service:check', modernWebCheck, modernContractCheck,
             modernInfraCheck, modernLocalDevCheck, verifyModernBuildRegistration
 }
 tasks.named('build') {
     dependsOn ':services:platform-sample:build', ':services:shell-bff:build', ':services:identity-access:build',
-            ':services:ofbiz-adapter:build', modernWebCheck, modernContractCheck,
+            ':services:ofbiz-adapter:build', ':services:product-catalog-service:build', modernWebCheck, modernContractCheck,
             modernInfraCheck, modernLocalDevCheck, verifyModernBuildRegistration
 }
