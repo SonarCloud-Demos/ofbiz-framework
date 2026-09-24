@@ -19,6 +19,7 @@ The following are firm principles for the migration:
 9. **Prefer managed platform services.** Use Azure Container Apps initially rather than operating Kubernetes. Revisit AKS only when measured requirements cannot be met by Container Apps.
 10. **Optimize for removal.** A slice is complete only when its replaced legacy entry points, jobs, writes, and eventually data structures can be retired.
 11. **Keep one authoritative build graph.** The root `./gradlew build` command builds and verifies all tracked legacy and modern code. New languages and toolchains integrate behind Gradle tasks rather than creating a second aggregate build.
+12. **Protect new and changed code with tests.** Sonar's coverage on New Code must remain at or above 80% for newly introduced or modified executable code. This improves the system incrementally without making the existing legacy codebase's aggregate coverage a migration blocker.
 
 ## 2. Current-state constraints that shape the migration
 
@@ -299,7 +300,7 @@ Work:
 - create the `services/`, `web/`, `contracts/`, `infra/`, and `local-dev/` source layout;
 - extend `settings.gradle` and the root lifecycle so `./gradlew build` includes every legacy and modern service, UI, contract, infrastructure-validation, and migration-tool module;
 - add Gradle adapters for pinned Node/package-manager and Terraform tooling, aggregate test/coverage reports, and a build-registration architecture test;
-- extend the root Sonar configuration to include all new source/test roots and reports, and make `./gradlew build sonar` the required whole-codebase CI gate;
+- extend the root Sonar configuration to include all new source/test roots and reports, configure a minimum 80% coverage-on-New-Code quality gate, and make `./gradlew build sonar` the required whole-codebase CI gate;
 - add the root `./modern` workflow, with `./modern build` delegating to `./gradlew build`, plus the pinned toolchain, Compose stack, deterministic fixtures, and health-based startup;
 - create service and UI templates with secure defaults, health/readiness endpoints, structured logging, OpenTelemetry, migrations, tests, container hardening, and ownership metadata;
 - implement contract linting and compatibility tests;
@@ -312,6 +313,7 @@ Exit criteria:
 - a clean development machine can run `./gradlew build`, `./modern bootstrap`, `./modern build`, `./modern up`, and `./modern smoke` from documented prerequisites;
 - `./modern build` delegates to `./gradlew build`, and a deliberate compile/test failure in any legacy or modern module fails both commands;
 - the registration test demonstrates that all tracked source roots participate in the aggregate build or have an explicit reviewed exclusion;
+- the Sonar quality gate fails a change when coverage on newly introduced or modified code is below 80%;
 - the local URL serves a shell test route with the Modern experience marker and at least one proxied legacy route without that marker;
 - CI proves the whole codebase with root Gradle/Sonar analysis and proves the hybrid stack with its smoke test;
 - no production application traffic has changed.
@@ -490,6 +492,7 @@ A capability is not migrated merely because a service exists. It is done only wh
 - database migrations, backfill, reconciliation, retention, backup, restore, and rollback have been tested;
 - outbox/inbox, idempotency, timeout, retry, DLQ, and replay behavior are tested where messaging is used;
 - OpenAPI/event compatibility, unit, integration, end-to-end, performance, accessibility, and security tests pass;
+- Sonar reports at least 80% coverage on the slice's newly introduced or modified executable code;
 - the module is registered in the root Gradle graph; `./gradlew build` builds/tests it and its reports are included in whole-repository Sonar analysis;
 - traces, logs, metrics, SLO dashboard, alerts, runbook, and on-call owner exist;
 - Terraform and deployment pipeline create and promote everything needed without portal-only steps;
@@ -513,7 +516,11 @@ Use a test pyramid adapted to a distributed hybrid system:
 - resilience tests for unavailable dependencies, duplicate/out-of-order events, poison messages, expired tokens, deployment rollback, and regional/platform failures;
 - production synthetic checks for one legacy route during migration and every critical modern journey.
 
-CI gates fast tests per change and always requires a whole-repository `./gradlew build sonar` gate before merge. Path-aware jobs improve feedback time but cannot replace this gate. The full hybrid runtime suite runs on merge/schedule. Staging validates actual Azure identity, networking, Service Bus, PostgreSQL, Key Vault, scaling, and policy behavior. Production releases use immutable artifacts promoted from staging, not rebuilt binaries.
+The minimum coverage policy is **80% Sonar coverage on New Code**. “New Code” uses the repository's Sonar new-code definition relative to the target branch or configured reference period and therefore covers both added lines and modified executable lines. Supported JVM and frontend line/branch coverage reports are generated through Gradle and imported before the quality gate is evaluated. The threshold applies to services, BFFs, jobs, adapters, web shell/routes, and shared executable packages.
+
+Generated sources, vendored dependencies, declarative contracts, database migrations, Terraform, and other non-executable configuration may be excluded only through the centrally reviewed Sonar configuration. Exclusions require a documented technical reason and may not be introduced merely to satisfy the threshold. Coverage is a guardrail rather than proof of test quality: tests must still exercise domain invariants, authorization failures, error paths, idempotency, migrations, and integration contracts. Teams should not replace meaningful integration or property tests with low-value assertions written solely to raise the percentage.
+
+CI gates fast tests per change and always requires a whole-repository `./gradlew build sonar` gate and successful Sonar quality-gate result before merge. Path-aware jobs improve feedback time but cannot replace this gate. The full hybrid runtime suite runs on merge/schedule. Staging validates actual Azure identity, networking, Service Bus, PostgreSQL, Key Vault, scaling, and policy behavior. Production releases use immutable artifacts promoted from staging, not rebuilt binaries.
 
 ## 8. Terraform organization and controls
 
