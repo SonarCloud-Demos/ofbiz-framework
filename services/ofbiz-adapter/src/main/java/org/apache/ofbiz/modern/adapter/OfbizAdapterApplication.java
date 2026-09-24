@@ -15,6 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
@@ -34,10 +35,12 @@ public final class OfbizAdapterApplication {
 
     public static void main(String[] args) throws IOException {
         Config config = new Config(URI.create(env("IDENTITY_EXCHANGE_URL", "http://identity-access:8083/internal/exchanges")),
-                URI.create(env("OFBIZ_ORIGIN", "https://legacy-ofbiz:8443")), required("WORKLOAD_TOKEN"), required("OFBIZ_JWT_KEY"));
+                URI.create(env("OFBIZ_ORIGIN", "https://legacy-ofbiz:8443")), required("WORKLOAD_TOKEN"), required("OFBIZ_JWT_KEY"),
+                URI.create(env("OFBIZ_REST_ORIGIN", "https://legacy-ofbiz:8443/rest")), nonBlank("OFBIZ_REST_USER_LOGIN_ID"));
         HttpServer server = HttpServer.create(new InetSocketAddress(Integer.parseInt(env("PORT", "8084"))), 0);
         server.createContext("/health/ready", e -> json(e, 200, "{\"status\":\"READY\"}"));
         server.createContext("/legacy-session", e -> legacySession(e, config));
+        server.createContext("/internal/catalog-export", e -> catalogExport(e, config));
         server.start();
     }
 
@@ -53,6 +56,48 @@ public final class OfbizAdapterApplication {
     }
     static URI legacyRequestUri(URI origin, String path) {
         return URI.create(origin.toString().replaceFirst("/$", "") + safeLegacyPath(path));
+    }
+
+    static String catalogRecordType(String supplied) {
+        return supplied != null && supplied.matches("categories|products|memberships") ? supplied : null;
+    }
+
+    static int catalogPageSize(String supplied) {
+        try { return Math.max(1, Math.min(supplied == null ? 200 : Integer.parseInt(supplied), 500)); }
+        catch (NumberFormatException invalid) { return -1; }
+    }
+
+    private static void catalogExport(HttpExchange exchange, Config config) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) { json(exchange, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+        String workload = exchange.getRequestHeaders().getFirst("X-Workload-Token");
+        if (workload == null || !MessageDigest.isEqual(workload.getBytes(StandardCharsets.UTF_8),
+                config.workloadToken().getBytes(StandardCharsets.UTF_8))) { json(exchange, 401, "{\"error\":\"unauthorized\"}"); return; }
+        Map<String, String> parameters = query(exchange.getRequestURI().getRawQuery());
+        String type = catalogRecordType(parameters.get("recordType"));
+        int limit = catalogPageSize(parameters.get("limit"));
+        if (type == null || limit < 1) { json(exchange, 400, "{\"error\":\"invalid_export_request\"}"); return; }
+        StringBuilder uri = new StringBuilder(config.restOrigin().toString().replaceFirst("/$", ""))
+                .append("/catalog-export/").append(type).append("?limit=").append(limit);
+        appendQuery(uri, "cursor", parameters.get("cursor"));
+        appendQuery(uri, "cutoff", parameters.get("cutoff"));
+        try {
+            HttpResponse<String> response = CLIENT.send(HttpRequest.newBuilder(URI.create(uri.toString()))
+                    .timeout(Duration.ofSeconds(10)).header("Authorization", "Bearer "
+                            + token(config.restUserLoginId(), config.jwtKey(), Instant.now()))
+                    .header("Accept", "application/json").GET().build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) { json(exchange, 502, "{\"error\":\"legacy_export_unavailable\"}"); return; }
+            json(exchange, 200, response.body());
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt(); json(exchange, 502, "{\"error\":\"legacy_export_unavailable\"}");
+        } catch (RuntimeException failure) {
+            json(exchange, 502, "{\"error\":\"legacy_export_unavailable\"}");
+        }
+    }
+
+    private static void appendQuery(StringBuilder uri, String name, String value) {
+        if (value != null && !value.isBlank() && value.length() <= 512) {
+            uri.append('&').append(name).append('=').append(URLEncoder.encode(value, StandardCharsets.UTF_8));
+        }
     }
 
     private static void legacySession(HttpExchange exchange, Config config) throws IOException {
@@ -79,7 +124,7 @@ public final class OfbizAdapterApplication {
     }
     private static void unavailable(HttpExchange exchange) throws IOException { if (FAILURES.incrementAndGet() >= 3) circuitOpenUntil = Instant.now().plusSeconds(30); json(exchange, 502, "{\"error\":\"legacy_unavailable\"}"); }
     private static Map<String,String> query(String raw) { Map<String,String> values = new HashMap<>(); if (raw != null) for (String item : raw.split("&")) { String[] pair=item.split("=",2); values.put(URLDecoder.decode(pair[0],StandardCharsets.UTF_8), pair.length==2?URLDecoder.decode(pair[1],StandardCharsets.UTF_8):""); } return values; }
-    private static String env(String name,String fallback){return System.getenv().getOrDefault(name,fallback);} private static String required(String name){String value=System.getenv(name);if(value==null||value.length()<64)throw new IllegalStateException(name+" must contain at least 64 characters");return value;}
+    private static String env(String name,String fallback){return System.getenv().getOrDefault(name,fallback);} private static String required(String name){String value=System.getenv(name);if(value==null||value.length()<64)throw new IllegalStateException(name+" must contain at least 64 characters");return value;} private static String nonBlank(String name){String value=System.getenv(name);if(value==null||value.isBlank())throw new IllegalStateException(name+" must not be blank");return value;}
     private static void json(HttpExchange e,int status,String body)throws IOException{byte[] bytes=body.getBytes(StandardCharsets.UTF_8);e.getResponseHeaders().set("Content-Type","application/json");e.getResponseHeaders().set("Cache-Control","no-store");e.sendResponseHeaders(status,bytes.length);try(var out=e.getResponseBody()){out.write(bytes);}}
-    record Config(URI exchange, URI origin, String workloadToken, String jwtKey) { }
+    record Config(URI exchange, URI origin, String workloadToken, String jwtKey, URI restOrigin, String restUserLoginId) { }
 }

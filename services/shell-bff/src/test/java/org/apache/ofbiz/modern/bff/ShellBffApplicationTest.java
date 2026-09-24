@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.time.Instant;
 import java.util.Set;
+import java.net.URI;
 import org.junit.jupiter.api.Test;
 
 class ShellBffApplicationTest {
@@ -46,5 +47,16 @@ class ShellBffApplicationTest {
         assertFalse(ShellBffApplication.cohortEnabled("subject", 100, true));
         assertEquals(ShellBffApplication.cohortEnabled("subject", 25, false),
                 ShellBffApplication.cohortEnabled("subject", 25, false));
+    }
+
+    @Test void catalogProxyAllowsOnlyReviewedPathsAndQueries() {
+        URI base = URI.create("http://catalog:8080/api/catalog/v1");
+        assertEquals("http://catalog:8080/api/catalog/v1/categories/100/products?limit=20&sort=name",
+                ShellBffApplication.catalogUri(base, URI.create("/bff/catalog/categories/100/products?limit=20&sort=name")).toString());
+        assertEquals("http://catalog:8080/api/catalog/v1/search?q=tiny+gizmo",
+                ShellBffApplication.catalogUri(base, URI.create("/bff/catalog/search?q=tiny%20gizmo")).toString());
+        assertEquals(null, ShellBffApplication.catalogUri(base, URI.create("/bff/catalog/admin")));
+        assertEquals(null, ShellBffApplication.catalogUri(base, URI.create("/bff/catalog/search?q=x&unknown=y")));
+        assertEquals(null, ShellBffApplication.catalogUri(base, URI.create("/bff/catalog/search?q=x&limit=1000")));
     }
 }

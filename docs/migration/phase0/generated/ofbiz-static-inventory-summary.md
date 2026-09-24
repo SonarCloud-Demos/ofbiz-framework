@@ -11,7 +11,7 @@ This is static repository evidence. It must be augmented with production traces 
 | components | 32 |
 | entities | 1118 |
 | entityEcas | 31 |
-| services | 3569 |
+| services | 3571 |
 | serviceEcas | 220 |
 | requests | 3254 |
 | views | 1415 |
@@ -21,7 +21,7 @@ This is static repository evidence. It must be augmented with production traces 
 | testSuites | 39 |
 | reportCandidates | 16 |
 | integrationCandidates | 248 |
-| dependencyCandidates | 5278 |
+| dependencyCandidates | 5279 |
 
 ## Component contribution counts
 
@@ -36,7 +36,7 @@ This is static repository evidence. It must be augmented with production traces 
 | marketing | `applications/marketing` | 110 | 0 | 146 | SalesForceAutomation, marketing |
 | order | `applications/order` | 465 | 53 | 378 | order |
 | party | `applications/party` | 266 | 0 | 274 | party |
-| product | `applications/product` | 835 | 4 | 763 | catalog, facility |
+| product | `applications/product` | 837 | 4 | 763 | catalog, facility |
 | securityext | `applications/securityext` | 2 | 0 | 0 | — |
 | workeffort | `applications/workeffort` | 167 | 33 | 111 | ical, workeffort |
 | base | `framework/base` | 0 | 0 | 0 | — |

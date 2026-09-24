@@ -1,5 +1,16 @@
 [
   {
+    "path": "/modern/catalog",
+    "experience": "candidate",
+    "owner": "product-catalog",
+    "roles": ["development-user"],
+    "bff": "/bff/catalog",
+    "apiContracts": ["contracts/openapi/product-catalog.yaml"],
+    "featureFlag": "catalog-route",
+    "fallback": "/auth/legacy",
+    "e2eTest": "local-dev/smoke-test.sh"
+  },
+  {
     "path": "/modern/platform",
     "experience": "modern",
     "owner": "modern-platform",

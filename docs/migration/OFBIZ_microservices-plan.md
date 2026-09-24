@@ -268,7 +268,7 @@ Durations are deliberately omitted until discovery establishes team capacity and
 
 **Goal:** establish facts, ownership, success measures, and migration safety before adding distributed-system complexity.
 
-**Status:** Complete and approved on 2026-09-24. Slice-specific production measurements and named delivery assignments continue as mandatory implementation inputs.
+**Status:** Complete and approved on 2026-09-24. Slice-specific production measurements remain mandatory inputs. A documented Phase 4 exception permits discovery and implementation with delivery assignments temporarily open, but production traffic still requires named operational accountability.
 
 Work:
 
@@ -373,6 +373,8 @@ Exit criteria:
 ### Phase 4 — First production vertical slice
 
 **Goal:** prove the complete extraction and UI migration method with a bounded, reversible capability.
+
+**Status:** Started on 2026-09-24 with Product category browse/search as the approved slice. Discovery status and evidence live under `docs/migration/phase4/`; no production readiness or traffic cutover is yet claimed.
 
 Choose the slice after Phase 0. A read-heavy catalog/search journey or another low-transaction capability is a likely candidate, but the plan must not predetermine it without dependency evidence.
 

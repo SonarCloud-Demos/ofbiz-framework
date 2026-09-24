@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 public final class ShellBffApplication {
     private static final Pattern CORRELATION = Pattern.compile("[A-Za-z0-9._-]{1,128}");
     private static final Pattern RETURN_PATH = Pattern.compile("/[-A-Za-z0-9_./]*");
+    private static final Pattern CATALOG_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]{0,63}");
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Semaphore BULKHEAD = new Semaphore(32);
@@ -40,13 +41,15 @@ public final class ShellBffApplication {
     public static void main(String[] args) throws IOException {
         int port = Integer.parseInt(env("PORT", "8082"));
         Config config = new Config(URI.create(env("PLATFORM_SERVICE_URL", "http://platform-sample:8081/api/platform")),
+                URI.create(env("CATALOG_SERVICE_URL", "http://product-catalog:8080/api/catalog/v1")),
                 URI.create(env("OIDC_AUTHORIZATION_ENDPOINT", "http://localhost:8180/realms/ofbiz-development/protocol/openid-connect/auth")),
                 URI.create(env("OIDC_TOKEN_ENDPOINT", "http://identity:8080/realms/ofbiz-development/protocol/openid-connect/token")),
                 URI.create(env("OIDC_USERINFO_ENDPOINT", "http://identity:8080/realms/ofbiz-development/protocol/openid-connect/userinfo")),
                 env("OIDC_CLIENT_ID", "modern-shell"), env("OIDC_REDIRECT_URI", "http://localhost:8080/auth/callback"),
                 Set.of(env("TRUSTED_HOSTS", "localhost").split(",")), Boolean.parseBoolean(env("COOKIE_SECURE", "false")),
                 URI.create(env("IDENTITY_EXCHANGE_URL", "http://identity-access:8083/internal/exchanges")), env("WORKLOAD_TOKEN", ""),
-                Integer.parseInt(env("PLATFORM_ROUTE_PERCENT", "100")), Boolean.parseBoolean(env("PLATFORM_ROUTE_DISABLED", "false")));
+                Integer.parseInt(env("PLATFORM_ROUTE_PERCENT", "100")), Boolean.parseBoolean(env("PLATFORM_ROUTE_DISABLED", "false")),
+                Integer.parseInt(env("CATALOG_ROUTE_PERCENT", "100")), Boolean.parseBoolean(env("CATALOG_ROUTE_DISABLED", "false")));
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/health/live", exchange -> json(exchange, 200, "{\"status\":\"UP\"}"));
         server.createContext("/health/ready", exchange -> json(exchange, 200, "{\"status\":\"READY\"}"));
@@ -56,6 +59,7 @@ public final class ShellBffApplication {
         server.createContext("/auth/logout", exchange -> logout(exchange, config));
         server.createContext("/auth/legacy", exchange -> legacy(exchange, config));
         server.createContext("/bff/platform", exchange -> platform(exchange, config));
+        server.createContext("/bff/catalog", exchange -> catalog(exchange, config));
         server.start();
         System.out.println("{\"level\":\"INFO\",\"event\":\"shell-bff.started\",\"port\":" + port + "}");
     }
@@ -138,7 +142,9 @@ public final class ShellBffApplication {
         if (current == null) { json(exchange, 401, "{\"authenticated\":false}"); return; }
         json(exchange, 200, "{\"authenticated\":true,\"user\":\"" + escape(current.username())
                 + "\",\"csrfToken\":\"" + current.csrf() + "\",\"platformRouteEnabled\":"
-                + cohortEnabled(current.subject(), config.routePercentage(), config.routeDisabled()) + "}");
+                + cohortEnabled(current.subject(), config.routePercentage(), config.routeDisabled())
+                + ",\"catalogRouteEnabled\":"
+                + cohortEnabled(current.subject(), config.catalogRoutePercentage(), config.catalogRouteDisabled()) + "}");
     }
 
     private static void logout(HttpExchange exchange, Config config) throws IOException {
@@ -191,6 +197,67 @@ public final class ShellBffApplication {
         finally { BULKHEAD.release(); }
     }
 
+    private static void catalog(HttpExchange exchange, Config config) throws IOException {
+        String correlation = correlationId(exchange.getRequestHeaders().getFirst("X-Correlation-ID"));
+        exchange.getResponseHeaders().set("X-Correlation-ID", correlation);
+        if (!validRequest(exchange, config, "GET")) return;
+        Session current = currentSession(exchange);
+        if (current == null) { json(exchange, 401, error("authentication_required", correlation)); return; }
+        if (!current.roles().contains("development-user")) { json(exchange, 403, error("forbidden", correlation)); return; }
+        if (!cohortEnabled(current.subject(), config.catalogRoutePercentage(), config.catalogRouteDisabled())) {
+            json(exchange, 404, error("route_disabled", correlation)); return;
+        }
+        URI upstream = catalogUri(config.catalog(), exchange.getRequestURI());
+        if (upstream == null) { json(exchange, 400, error("invalid_catalog_request", correlation)); return; }
+        if (!BULKHEAD.tryAcquire()) { json(exchange, 503, error("temporarily_unavailable", correlation)); return; }
+        try {
+            HttpResponse<String> response = CLIENT.send(HttpRequest.newBuilder(upstream).timeout(Duration.ofSeconds(3))
+                    .header("X-Correlation-ID", correlation).GET().build(), HttpResponse.BodyHandlers.ofString());
+            int status = response.statusCode();
+            json(exchange, status == 200 || status == 400 || status == 404 ? status : 502,
+                    status == 200 || status == 400 || status == 404 ? response.body() : error("upstream_unavailable", correlation));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt(); json(exchange, 503, error("temporarily_unavailable", correlation));
+        } catch (Exception failure) { json(exchange, 502, error("upstream_unavailable", correlation)); }
+        finally { BULKHEAD.release(); }
+    }
+
+    static URI catalogUri(URI base, URI browserUri) {
+        String prefix = "/bff/catalog";
+        String path = browserUri.getPath();
+        if (!path.startsWith(prefix)) return null;
+        String suffix = path.substring(prefix.length());
+        boolean category = suffix.matches("/categories/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}");
+        boolean browse = suffix.matches("/categories/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}/products");
+        boolean product = suffix.matches("/products/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}/summary");
+        boolean search = "/search".equals(suffix);
+        if (!(category || browse || product || search)) return null;
+        Map<String, String> values = query(browserUri);
+        Set<String> allowed = search ? Set.of("q", "categoryId", "cursor", "limit", "sort")
+                : browse ? Set.of("cursor", "limit", "sort") : Set.of();
+        if (!allowed.containsAll(values.keySet())) return null;
+        if (search && (values.get("q") == null || values.get("q").isBlank() || values.get("q").length() > 200)) return null;
+        if (values.containsKey("categoryId") && !CATALOG_ID.matcher(values.get("categoryId")).matches()) return null;
+        if (values.containsKey("cursor") && (values.get("cursor").isBlank() || values.get("cursor").length() > 512
+                || !values.get("cursor").matches("[A-Za-z0-9_-]+"))) return null;
+        if (values.containsKey("sort") && !values.get("sort").matches("catalog|name")) return null;
+        if (values.containsKey("limit")) {
+            try { int limit = Integer.parseInt(values.get("limit")); if (limit < 1 || limit > 100) return null; }
+            catch (NumberFormatException invalid) { return null; }
+        }
+        StringBuilder target = new StringBuilder(base.toString().replaceFirst("/$", "")).append(suffix);
+        if (!values.isEmpty()) {
+            target.append('?');
+            boolean first = true;
+            for (var entry : values.entrySet()) {
+                if (!first) target.append('&');
+                target.append(encode(entry.getKey())).append('=').append(encode(entry.getValue()));
+                first = false;
+            }
+        }
+        return URI.create(target.toString());
+    }
+
     private static boolean validRequest(HttpExchange exchange, Config config, String method) throws IOException {
         if (!trustedHost(exchange.getRequestHeaders().getFirst("Host"), config.hosts())) { json(exchange, 400, error("invalid_request", correlationId(null))); return false; }
         if (!method.equals(exchange.getRequestMethod())) { exchange.getResponseHeaders().set("Allow", method); json(exchange, 405, error("method_not_allowed", correlationId(null))); return false; }
@@ -214,9 +281,12 @@ public final class ShellBffApplication {
         return null;
     }
     private static Map<String, String> query(HttpExchange exchange) {
-        Map<String, String> values = new java.util.HashMap<>();
-        String raw = exchange.getRequestURI().getRawQuery();
-        if (raw != null) for (String item : raw.split("&")) { String[] pair = item.split("=", 2); values.put(java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8), pair.length == 2 ? java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8) : ""); }
+        return query(exchange.getRequestURI());
+    }
+    private static Map<String, String> query(URI uri) {
+        Map<String, String> values = new java.util.LinkedHashMap<>();
+        String raw = uri.getRawQuery();
+        if (raw != null) for (String item : raw.split("&")) { String[] pair = item.split("=", 2); String key = java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8); if (values.containsKey(key)) values.put("__duplicate__", key); else values.put(key, pair.length == 2 ? java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8) : ""); }
         return values;
     }
     private static String randomToken() { byte[] bytes = new byte[32]; RANDOM.nextBytes(bytes); return base64(bytes); }
@@ -230,9 +300,9 @@ public final class ShellBffApplication {
     private static void audit(String event, String subject, String outcome) { System.out.println("{\"level\":\"INFO\",\"event\":\"identity." + event + "\",\"subject\":\"" + escape(subject) + "\",\"outcome\":\"" + outcome + "\"}"); }
     private static void json(HttpExchange exchange, int status, String body) throws IOException { byte[] bytes = body.getBytes(StandardCharsets.UTF_8); exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8"); exchange.getResponseHeaders().set("Cache-Control", "no-store"); exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff"); exchange.getResponseHeaders().set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'"); exchange.sendResponseHeaders(status, bytes.length); try (var output = exchange.getResponseBody()) { output.write(bytes); } }
 
-    record Config(URI platform, URI authorization, URI token, URI userInfo, String clientId, String redirectUri,
+    record Config(URI platform, URI catalog, URI authorization, URI token, URI userInfo, String clientId, String redirectUri,
                   Set<String> hosts, boolean secureCookie, URI identityExchange, String workloadToken,
-                  int routePercentage, boolean routeDisabled) { }
+                  int routePercentage, boolean routeDisabled, int catalogRoutePercentage, boolean catalogRouteDisabled) { }
     record LoginAttempt(String verifier, String returnPath, Instant expires) { }
     record Session(String subject, String username, Set<String> roles, String csrf, Instant expires) { }
 }

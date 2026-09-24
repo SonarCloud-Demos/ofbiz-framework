@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api name="Product Catalog Projection Export API"
+        path="catalog-export"
+        displayName="Product Catalog Projection Export"
+        description="Private bounded migration export; route only through the transitional adapter"
+        publish="true">
+    <resource name="CatalogProjectionExport" path="" auth="true" publish="true">
+        <operation verb="get" path="/{recordType}" produces="application/json" auth="true"
+                description="Export a stable page of approved category, product, or membership fields">
+            <service name="exportProductCatalogProjectionPage"/>
+            <queryParam name="cursor" type="string"/>
+            <queryParam name="limit" type="integer"/>
+            <queryParam name="cutoff" type="string"/>
+        </operation>
+    </resource>
+</api>

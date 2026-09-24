@@ -165,7 +165,7 @@ These are conservative static candidates from component URIs and literal service
 | product | commonext | component-resource | 4 |
 | product | content | component-resource | 5 |
 | product | content | service-call | 33 |
-| product | datamodel | entity-reference | 967 |
+| product | datamodel | entity-reference | 968 |
 | product | ecommerce | component-resource | 11 |
 | product | marketing | component-resource | 2 |
 | product | order | component-resource | 11 |

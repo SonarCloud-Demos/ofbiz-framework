@@ -53,6 +53,7 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: local-identity-only
+      KC_HOSTNAME: http://localhost:8180
     volumes:
       - ./config/ofbiz-development-realm.json:/opt/keycloak/data/import/ofbiz-development-realm.json:ro
     ports: ["127.0.0.1:8180:8080"]
@@ -87,6 +88,7 @@ services:
       context: ../services/shell-bff
     environment:
       PLATFORM_SERVICE_URL: http://platform-sample:8081/api/platform
+      CATALOG_SERVICE_URL: http://product-catalog:8080/api/catalog/v1
       TRUSTED_HOSTS: localhost
       OIDC_AUTHORIZATION_ENDPOINT: http://localhost:8180/realms/ofbiz-development/protocol/openid-connect/auth
       OIDC_TOKEN_ENDPOINT: http://identity:8080/realms/ofbiz-development/protocol/openid-connect/token
@@ -96,6 +98,8 @@ services:
       COOKIE_SECURE: "false"
       PLATFORM_ROUTE_PERCENT: "100"
       PLATFORM_ROUTE_DISABLED: "false"
+      CATALOG_ROUTE_PERCENT: "100"
+      CATALOG_ROUTE_DISABLED: "false"
       IDENTITY_EXCHANGE_URL: http://identity-access:8083/internal/exchanges
       WORKLOAD_TOKEN: local-workload-token-local-workload-token-local-workload-token-1234567890
     healthcheck:
@@ -107,6 +111,7 @@ services:
       platform-sample: {condition: service_healthy}
       identity: {condition: service_healthy}
       identity-access: {condition: service_healthy}
+      product-catalog: {condition: service_healthy}
   identity-access:
     build:
       context: ../services/identity-access
@@ -124,11 +129,33 @@ services:
     environment:
       IDENTITY_EXCHANGE_URL: http://identity-access:8083/internal/exchanges
       OFBIZ_ORIGIN: http://shell:8080/legacy
+      OFBIZ_REST_ORIGIN: http://legacy-ofbiz:8080/rest
+      OFBIZ_REST_USER_LOGIN_ID: admin
       WORKLOAD_TOKEN: local-workload-token-local-workload-token-local-workload-token-1234567890
       OFBIZ_JWT_KEY: local-ofbiz-jwt-key-local-ofbiz-jwt-key-local-ofbiz-jwt-key-1234567890
     depends_on:
       identity-access: {condition: service_healthy}
       legacy-ofbiz: {condition: service_healthy}
+  product-catalog:
+    build:
+      context: ../services/product-catalog-service
+    environment:
+      CATALOG_DATABASE_URL: jdbc:postgresql://postgres:5432/product_catalog
+      CATALOG_DATABASE_USER: product_catalog
+      CATALOG_DATABASE_PASSWORD: local-product-catalog-only
+      CATALOG_INGESTION_KEY: local-catalog-ingestion-key-local-catalog-ingestion-key-1234567890
+      CATALOG_BACKFILL_ENABLED: "true"
+      CATALOG_BACKFILL_RECONCILE_ENABLED: "false"
+      CATALOG_ADAPTER_URL: http://ofbiz-adapter:8084
+      CATALOG_ADAPTER_WORKLOAD_TOKEN: local-workload-token-local-workload-token-local-workload-token-1234567890
+    depends_on:
+      database-policy: {condition: service_healthy}
+      ofbiz-adapter: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
   legacy-ofbiz:
     build:
       context: ..
@@ -149,6 +176,7 @@ services:
     depends_on:
       shell-bff: {condition: service_healthy}
       ofbiz-adapter: {condition: service_started}
+      product-catalog: {condition: service_healthy}
       legacy-ofbiz: {condition: service_healthy}
       identity: {condition: service_healthy}
     healthcheck:

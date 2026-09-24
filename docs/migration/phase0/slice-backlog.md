@@ -1,6 +1,6 @@
 # Initial slice backlog and recommendation
 
-Status: approved on 2026-09-24. Scores remain hypotheses to validate with production evidence.
+Status: revised and approved on 2026-09-24. Scores remain hypotheses to validate with production evidence.
 
 Scale: 1 is low/unfavorable and 5 is high/favorable. For “blast radius” and “data sensitivity,” a higher score means safer/lower. Total is unweighted and is used only to make assumptions visible.
 
@@ -13,26 +13,28 @@ Scale: 1 is low/unfavorable and 5 is high/favorable. For “blast radius” and 
 
 ## Approved first slice
 
-The approved first slice is **outbound notification delivery plus a modern delivery-status administration route**. It can exercise an independently owned database, asynchronous messaging, an external-provider adapter, retries/DLQ, BFF/UI security, Entra authorization, observability, Terraform, and the Modern experience marker without placing order/payment correctness in the first production cutover.
+The approved first slice is **Product category browse/search plus its modern customer-facing route**. The project changed the selection from outbound notification delivery on 2026-09-24. Although notifications scored one point higher in the initial unweighted assessment, Product category browse/search was selected to validate a recognizable customer journey and the modern UI migration while retaining a read-heavy, low-blast-radius first cutover.
 
-The slice boundary is delivery only. The calling business context continues to own the decision and consent to communicate; the Notifications context owns template-version rendering if approved, provider submission, attempts, suppression-at-delivery, and status. It must not infer business success from delivery.
+The slice boundary is category navigation, product discovery and the product summary fields required for browse/search. Pricing, promotions, inventory availability, ordering and product maintenance remain outside the slice unless their read contracts are explicitly approved. The Product Catalog context owns its extracted browse/search model and must not query the legacy database at runtime after cutover.
+
+Outbound notification delivery returns to the prioritized backlog for a later migration wave.
 
 ## Acceptance gates before selection is final
 
-- trace and enumerate every current email/communication service caller and scheduled job;
-- identify providers, credentials, callbacks, retry behavior, templates, volumes and peak rate;
-- assign consent/suppression ownership and classify message content/recipient data;
-- prove a fallback/rollback that cannot send duplicates;
-- define the modern admin route, permissions, SLO, RPO/RTO, retention and support owner;
+- enumerate the current category browse/search routes, entities, services and content dependencies;
+- define the category, product-summary, pricing, store-eligibility and content fields that are in or out of scope;
+- measure catalog size, query volume, peak rate, latency and search-result relevance against a reproducible dataset;
+- define the backfill/change-feed mechanism and prove shadow-result reconciliation and route fallback;
+- define the modern customer route, permissions, SLO, RPO/RTO, cache/search-index recovery and support owner;
 - confirm business value and that the slice is representative enough to validate the platform;
 - obtain product, engineering, security/privacy and SRE approval below.
 
 | Approval | Owner | Decision/date |
 | --- | --- | --- |
-| Product value and route scope | Project approval | Approved 2026-09-24 |
-| Domain boundary and data ownership | Project approval | Approved 2026-09-24 |
+| Product value and route scope | Project approval | Product category browse/search approved 2026-09-24 |
+| Domain boundary and data ownership | Project approval | Product Catalog boundary approved 2026-09-24; exact fields remain a slice input |
 | Security/privacy and classification | Project approval | Approved 2026-09-24; detailed controls remain slice inputs |
 | SLO/operations/on-call | Project approval | Approved 2026-09-24; measured targets remain slice inputs |
-| Migration/cutover safety | Project approval | Approved 2026-09-24; cutover plan still requires evidence |
+| Migration/cutover safety | Project approval | Approved 2026-09-24; reconciliation and cutover plan still require evidence |
 
 If implementation evidence invalidates this selection, retain the scoring method, update the assumptions, and approve a replacement explicitly.

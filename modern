@@ -20,9 +20,9 @@ case "$command" in
     exec "$root_dir/gradlew" check "$@"
     ;;
   up)
-    "$root_dir/gradlew" :services:platform-sample:containerJar modernWebCheck
+    "$root_dir/gradlew" :services:platform-sample:containerJar :services:shell-bff:containerJar :services:identity-access:containerJar :services:ofbiz-adapter:containerJar :services:product-catalog-service:bootJar modernWebCheck
     docker compose -f "$compose_file" up --build --detach --wait "$@"
-    echo 'OFBiz hybrid environment: http://localhost:8080/modern/platform'
+    echo 'OFBiz hybrid environment: http://localhost:8080/modern/catalog'
     ;;
   down)
     exec docker compose -f "$compose_file" down "$@"
