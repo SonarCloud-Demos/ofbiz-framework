@@ -1,0 +1,107 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with this
+# work for additional information regarding copyright ownership.
+name: Modern federated delivery
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [dev, staging]
+      apply:
+        description: Apply the reviewed plan
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: '17 4 * * *'
+permissions:
+  contents: read
+  id-token: write
+env:
+  TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+jobs:
+  plan:
+    runs-on: [self-hosted, modern-platform]
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Exchange GitHub OIDC token for Azure identity
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          response=$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange")
+          token=$(jq -er .value <<<"$response")
+          az login --service-principal --username "$AZURE_CLIENT_ID" \
+            --tenant "$AZURE_TENANT_ID" --federated-token "$token" --output none
+          unset response token
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+      - name: Validate paved road
+        run: ./modern check
+      - name: Initialize and plan exact environment
+        shell: bash
+        env:
+          TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          TF_VAR_template_service_image: ${{ vars.TEMPLATE_SERVICE_IMAGE }}
+          TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
+        run: |
+          set -euo pipefail
+          directory="infra/environments/$TARGET_ENVIRONMENT"
+          terraform -chdir="$directory" init -input=false \
+            -backend-config="${{ vars.TERRAFORM_BACKEND_CONFIG }}"
+          set +e
+          terraform -chdir="$directory" plan -input=false -lock-timeout=5m \
+            -detailed-exitcode -out=../../../modern.tfplan
+          result=$?
+          set -e
+          if [[ "$result" -eq 1 ]]; then exit 1; fi
+          if [[ "${{ github.event_name }}" == schedule && "$result" -eq 2 ]]; then
+            echo 'Scheduled drift detected.' >&2
+            exit 2
+          fi
+      - name: Apply reviewed plan
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply }}
+        run: terraform -chdir="infra/environments/$TARGET_ENVIRONMENT" apply -input=false ../../../modern.tfplan
+
+  artifact:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: [self-hosted, modern-platform]
+    environment: artifact-promotion
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Build and test using approved dependency configuration
+        env:
+          MODERN_GRADLE_INIT_SCRIPT: ${{ vars.MODERN_GRADLE_INIT_SCRIPT }}
+        run: ./modern build test
+      - name: Build, scan, attest and sign immutable service image
+        shell: bash
+        env:
+          IMAGE_REPOSITORY: ${{ vars.MODERN_IMAGE_REPOSITORY }}
+          JAVA_BUILD_IMAGE: ${{ vars.JAVA_BUILD_IMAGE }}
+          JAVA_RUNTIME_IMAGE: ${{ vars.JAVA_RUNTIME_IMAGE }}
+        run: |
+          set -euo pipefail
+          tag="$IMAGE_REPOSITORY:${GITHUB_SHA}"
+          docker build --file services/template-service/Dockerfile \
+            --build-arg JAVA_BUILD_IMAGE="$JAVA_BUILD_IMAGE" \
+            --build-arg JAVA_RUNTIME_IMAGE="$JAVA_RUNTIME_IMAGE" \
+            --build-arg ARTIFACTORY_MAVEN_URL="$ARTIFACTORY_MAVEN_URL" \
+            --build-arg ARTIFACTORY_GRADLE_PLUGIN_URL="$ARTIFACTORY_GRADLE_PLUGIN_URL" \
+            --secret id=artifactory_user,src="$ARTIFACTORY_USER_FILE" \
+            --secret id=artifactory_token,src="$ARTIFACTORY_TOKEN_FILE" \
+            --secret id=corporate_ca,src="$CORPORATE_CA_FILE" \
+            --tag "$tag" .
+          syft "$tag" -o cyclonedx-json=sbom.cdx.json
+          grype "$tag" --fail-on high
+          docker push "$tag"
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$tag")
+          cosign sign --yes "$digest"
+          cosign attest --yes --type cyclonedx --predicate sbom.cdx.json "$digest"

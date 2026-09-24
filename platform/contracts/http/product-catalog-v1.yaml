@@ -1,0 +1,53 @@
+openapi: 3.1.0
+info:
+  title: Product catalog pilot API
+  version: 1.0.0
+paths:
+  /bff/catalog/products:
+    get:
+      summary: Search the OFBiz-owned product projection
+      parameters:
+        - {name: q, in: query, schema: {type: string, maxLength: 255}}
+        - {name: type, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200':
+          description: Deterministically ordered page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, limit, offset, hasMore]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Product'}}
+                  limit: {type: integer}
+                  offset: {type: integer}
+                  hasMore: {type: boolean}
+        '401': {description: Authentication required}
+        '403': {description: CATALOG role required}
+  /bff/catalog/products/{productId}:
+    get:
+      summary: Read basic product detail
+      parameters:
+        - {name: productId, in: path, required: true, schema: {type: string, maxLength: 64}}
+      responses:
+        '200':
+          description: Product detail
+          content: {application/json: {schema: {$ref: '#/components/schemas/Product'}}}
+        '404': {description: Product does not exist in the projection}
+components:
+  schemas:
+    Product:
+      type: object
+      required: [productId, sourceUpdatedAt, sourceChecksum]
+      properties:
+        productId: {type: string}
+        internalName: {type: [string, 'null']}
+        productName: {type: [string, 'null']}
+        productTypeId: {type: [string, 'null']}
+        statusId: {type: [string, 'null']}
+        description: {type: [string, 'null']}
+        sourceUpdatedAt: {type: string, format: date-time}
+        sourceChecksum: {type: string}

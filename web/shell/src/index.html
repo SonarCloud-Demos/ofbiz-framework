@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OFBiz modern shell</title>
+  <link rel="stylesheet" href="/modern/styles.css">
+  <script defer src="/modern/route-manifest.js"></script>
+  <script defer src="/modern/app.js"></script>
+</head>
+<body>
+  <header>
+    <a href="/modern/">OFBiz</a>
+    <nav aria-label="Primary"><a href="/catalog/products">Products</a> <a href="/">Legacy application</a></nav>
+    <span id="session-user" aria-live="polite"></span>
+    <button id="sign-out" type="button" hidden>Sign out</button>
+    <span data-generation aria-live="polite">Loading route state</span>
+  </header>
+  <main>
+    <section id="home-view">
+      <h1>Modern application shell</h1>
+      <p class="notice">Business capabilities continue to use OFBiz until an approved slice is migrated.</p>
+    </section>
+    <section id="catalog-view" hidden>
+      <h1>Product catalog</h1>
+      <p class="notice">This read-only projection is shadowed from OFBiz. OFBiz remains authoritative.</p>
+      <form id="catalog-search" role="search">
+        <label for="catalog-query">Product ID or name</label>
+        <input id="catalog-query" name="q" maxlength="255">
+        <button type="submit">Search</button>
+      </form>
+      <p id="catalog-status" aria-live="polite"></p>
+      <ul id="catalog-results"></ul>
+      <article id="catalog-detail" hidden></article>
+    </section>
+  </main>
+  <p id="shell-error" role="alert" hidden></p>
+</body>
+</html>

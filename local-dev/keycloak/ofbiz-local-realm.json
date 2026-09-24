@@ -1,0 +1,80 @@
+{
+  "realm": "ofbiz-local",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "roles": {
+    "realm": [
+      { "name": "CATALOG", "description": "Read the modern catalog pilot" },
+      { "name": "LEGACY_USER", "description": "Use the local OFBiz identity bridge" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "shell-bff",
+      "name": "OFBiz local shell BFF",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-shell-bff-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "publicClient": false,
+      "redirectUris": ["http://localhost:18080/login/oauth2/code/entra"],
+      "webOrigins": ["http://localhost:18080"],
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "local tenant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "tid",
+            "claim.value": "local-tenant",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "application roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "catalog",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Local",
+      "lastName": "Catalog User",
+      "email": "catalog@localhost.invalid",
+      "credentials": [{ "type": "password", "value": "catalog", "temporary": false }],
+      "realmRoles": ["CATALOG", "LEGACY_USER"]
+    },
+    {
+      "username": "viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Local",
+      "lastName": "Unauthorized Viewer",
+      "email": "viewer@localhost.invalid",
+      "credentials": [{ "type": "password", "value": "viewer", "temporary": false }],
+      "realmRoles": ["LEGACY_USER"]
+    }
+  ]
+}

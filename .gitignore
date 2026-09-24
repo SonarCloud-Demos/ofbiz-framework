@@ -26,6 +26,7 @@ hooks/
 .project
 .settings
 .gradle/
+.gradle-modern/
 .groovy
 .pc
 .DS_Store

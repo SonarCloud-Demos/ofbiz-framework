@@ -1,0 +1,20 @@
+apiVersion: modern.ofbiz.apache.org/v1
+kind: ServiceLevelObjective
+metadata:
+  name: replace-me
+  owner: replace-me
+spec:
+  service: replace-me
+  journey: replace-me
+  window: 30d
+  availability:
+    target: 99.9
+    indicator: successful_valid_requests / valid_requests
+  latency:
+    target: 99.0
+    thresholdMilliseconds: 500
+  alerting:
+    fastBurn: {window: 1h, burnRate: 14.4}
+    slowBurn: {window: 6h, burnRate: 6}
+  exclusions:
+    - approved-maintenance-window

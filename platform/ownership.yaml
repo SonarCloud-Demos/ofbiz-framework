@@ -1,0 +1,42 @@
+version: 1
+areas:
+  paved-road:
+    paths:
+      - modern
+      - platform/**
+      - services/template-service/**
+      - web/template-route/**
+      - local-dev/**
+    accountableOwner: migration-platform-team
+    reviewers:
+      - security
+      - operations
+  contracts:
+    paths:
+      - platform/contracts/**
+    accountableOwner: migration-architecture
+    reviewers:
+      - affected-domain-owner
+      - data-owner
+  phase-2-shell-edge:
+    paths:
+      - platform/routes.yaml
+      - services/shell-bff/**
+      - web/shell/**
+      - local-dev/nginx-edge.conf
+    accountableOwner: migration-platform-team
+    reviewers:
+      - security
+      - accessibility
+      - operations
+  product-catalog-pilot:
+    paths:
+      - services/product-catalog-service/**
+      - platform/contracts/http/product-catalog-v1.yaml
+      - docs/migration/phase-3/**
+    accountableOwner: catalog-domain-owner
+    reviewers:
+      - product-owner
+      - data-owner
+      - security
+      - operations

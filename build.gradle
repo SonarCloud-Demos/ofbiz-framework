@@ -61,13 +61,31 @@ sonar {
                 'framework',
                 'themes',
                 'services',
+                'web',
+                'platform',
+                'infra',
                 'local-dev',
-                'migration',
+                'docs/migration',
                 '.github',
+                'modern',
                 'build.gradle',
                 'README.md',
                 '.asf.yaml',
         ].findAll { file(it).exists() }.join(',')
+        property "sonar.java.binaries", [
+                'build/classes/java/main',
+                'build/classes/groovy/main',
+                'services/template-service/build/classes/java/main',
+                'services/shell-bff/build/classes/java/main',
+                'services/product-catalog-service/build/classes/java/main',
+        ].join(',')
+        property "sonar.java.test.binaries", [
+                'build/classes/java/test',
+                'build/classes/groovy/test',
+                'services/template-service/build/classes/java/test',
+                'services/shell-bff/build/classes/java/test',
+                'services/product-catalog-service/build/classes/java/test',
+        ].join(',')
         property "sonar.exclusions", [
                 '**/build/**',
                 '**/.gradle/**',
@@ -90,6 +108,74 @@ sonar {
                 '**/*.woff2',
         ].join(',')
     }
+}
+
+/* ========================================================
+ * Modern composite lifecycle
+ * ======================================================== */
+
+if (System.getenv('OFBIZ_LEGACY_DISTRIBUTION') != 'true') {
+def templateServiceBuild = gradle.includedBuild('template-service')
+def shellBffBuild = gradle.includedBuild('shell-bff')
+def productCatalogServiceBuild = gradle.includedBuild('product-catalog-service')
+
+tasks.register('modernServicesBuild') {
+    group = 'build'
+    description = 'Builds every independently buildable modern Java service.'
+    dependsOn templateServiceBuild.task(':build'), shellBffBuild.task(':build'), productCatalogServiceBuild.task(':build')
+}
+
+tasks.register('modernServicesTest') {
+    group = 'verification'
+    description = 'Tests every independently buildable modern Java service.'
+    dependsOn templateServiceBuild.task(':test'), shellBffBuild.task(':test'), productCatalogServiceBuild.task(':test')
+}
+
+def buildTemplateRoute = tasks.register('buildTemplateRoute', Exec) {
+    commandLine 'sh', file('web/template-route/build.sh')
+}
+def buildModernShell = tasks.register('buildModernShell', Exec) {
+    commandLine 'sh', file('web/shell/build.sh')
+}
+def testTemplateRoute = tasks.register('testTemplateRoute', Exec) {
+    commandLine 'sh', file('web/template-route/test.sh')
+}
+def testModernShell = tasks.register('testModernShell', Exec) {
+    commandLine 'sh', file('web/shell/test.sh')
+}
+def testModernArchitecture = tasks.register('testModernArchitecture', Exec) {
+    commandLine 'sh', file('platform/architecture/check.sh')
+}
+def testPhase2Architecture = tasks.register('testPhase2Architecture', Exec) {
+    commandLine 'sh', file('platform/architecture/check-phase-2.sh')
+}
+def testPhase3Architecture = tasks.register('testPhase3Architecture', Exec) {
+    commandLine 'sh', file('platform/architecture/check-phase-3.sh')
+}
+
+tasks.register('modernWebBuild') {
+    group = 'build'
+    description = 'Builds every modern web artifact.'
+    dependsOn buildTemplateRoute, buildModernShell
+}
+
+tasks.register('modernWebTest') {
+    group = 'verification'
+    description = 'Tests every modern web artifact and repository architecture contract.'
+    dependsOn testTemplateRoute, testModernShell, testModernArchitecture, testPhase2Architecture, testPhase3Architecture
+}
+
+tasks.named('build') {
+    dependsOn modernServicesBuild, modernWebBuild
+}
+
+tasks.named('test') {
+    dependsOn modernServicesTest, modernWebTest
+}
+
+tasks.named('sonar') {
+    dependsOn test, jacocoTestReport
+}
 }
 
 /* OWASP plugin

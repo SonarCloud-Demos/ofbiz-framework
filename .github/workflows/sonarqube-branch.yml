@@ -14,10 +14,15 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
-      - name: Set up JDK 17
+      - name: Install architecture-check dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
+          rg --version
+      - name: Set up JDK 21
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
-          java-version: 17
+          java-version: 21
           distribution: 'zulu'
       - name: Cache SonarQube packages
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -28,15 +33,36 @@ jobs:
       - name: Cache Gradle packages
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
-          restore-keys: ${{ runner.os }}-gradle
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-jdk21-gradle-${{ hashFiles('**/*.gradle', '**/gradle.properties', '**/settings.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-jdk21-gradle-
       - name: Grant execute permission for Gradle wrapper scripts
         run: chmod +x gradlew gradle/init-gradle-wrapper.sh
       - name: Initialize Gradle wrapper
         run: ./gradle/init-gradle-wrapper.sh
+      - name: Prepare approved Gradle repository credentials
+        shell: bash
+        env:
+          ARTIFACTORY_USER: ${{ secrets.ARTIFACTORY_USER }}
+          ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/modern-gradle-secrets"
+          printf '%s' "$ARTIFACTORY_USER" > "$RUNNER_TEMP/modern-gradle-secrets/user"
+          printf '%s' "$ARTIFACTORY_TOKEN" > "$RUNNER_TEMP/modern-gradle-secrets/token"
+          chmod 600 "$RUNNER_TEMP/modern-gradle-secrets/user" "$RUNNER_TEMP/modern-gradle-secrets/token"
       - name: Build and analyze branch
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_SCANNER_JAVA_OPTS: -Xmx5g
-        run: ./gradlew build jacocoTestReport sonar --info
+          ARTIFACTORY_USER_FILE: ${{ runner.temp }}/modern-gradle-secrets/user
+          ARTIFACTORY_TOKEN_FILE: ${{ runner.temp }}/modern-gradle-secrets/token
+          ARTIFACTORY_MAVEN_URL: ${{ vars.ARTIFACTORY_MAVEN_URL }}
+          ARTIFACTORY_GRADLE_PLUGIN_URL: ${{ vars.ARTIFACTORY_GRADLE_PLUGIN_URL }}
+        run: >
+          ./gradlew --init-script gradle/modern-artifactory.init.gradle
+          build sonar --info
+      - name: Remove temporary Gradle credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/modern-gradle-secrets/user" "$RUNNER_TEMP/modern-gradle-secrets/token"

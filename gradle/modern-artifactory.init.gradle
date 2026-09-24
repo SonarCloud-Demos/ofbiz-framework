@@ -1,0 +1,52 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information.
+ * The ASF licenses this file to you under the Apache License, Version 2.0.
+ */
+
+def requiredEnvironment = { String name ->
+    def value = System.getenv(name)
+    if (!value) {
+        throw new GradleException("Required environment variable is not set: ${name}")
+    }
+    value
+}
+
+def secretFile = { String variable ->
+    def path = requiredEnvironment(variable)
+    def file = new File(path)
+    if (!file.isFile() || !file.canRead()) {
+        throw new GradleException("Credential file from ${variable} is not readable")
+    }
+    file.text.trim()
+}
+
+def pluginUrl = requiredEnvironment('ARTIFACTORY_GRADLE_PLUGIN_URL')
+def mavenUrl = requiredEnvironment('ARTIFACTORY_MAVEN_URL')
+def repositoryUser = secretFile('ARTIFACTORY_USER_FILE')
+def repositoryToken = secretFile('ARTIFACTORY_TOKEN_FILE')
+
+beforeSettings { settings ->
+    settings.pluginManagement.repositories.clear()
+    settings.pluginManagement.repositories.maven {
+        name = 'approvedGradlePlugins'
+        url = uri(pluginUrl)
+        credentials {
+            username = repositoryUser
+            password = repositoryToken
+        }
+    }
+}
+
+allprojects { project ->
+    project.repositories.clear()
+    project.repositories.maven {
+        name = 'approvedMaven'
+        url = uri(mavenUrl)
+        credentials {
+            username = repositoryUser
+            password = repositoryToken
+        }
+    }
+}

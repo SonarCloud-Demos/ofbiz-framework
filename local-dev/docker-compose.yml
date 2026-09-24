@@ -1,0 +1,229 @@
+name: ofbiz-modern
+
+services:
+  template-service:
+    profiles: [core, full]
+    build:
+      context: ..
+      dockerfile: services/template-service/Dockerfile
+      args:
+        JAVA_BUILD_IMAGE: ${MODERN_JAVA_BUILD_IMAGE:?set an approved build image}
+        JAVA_RUNTIME_IMAGE: ${MODERN_JAVA_RUNTIME_IMAGE:?set an approved runtime image}
+        ARTIFACTORY_MAVEN_URL: ${ARTIFACTORY_MAVEN_URL:?set the Maven repository URL}
+        ARTIFACTORY_GRADLE_PLUGIN_URL: ${ARTIFACTORY_GRADLE_PLUGIN_URL:?set the Gradle plugin repository URL}
+      secrets:
+        - artifactory_user
+        - artifactory_token
+        - corporate_ca
+    environment:
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    ports:
+      - "18082:8080"
+    healthcheck:
+      test: [CMD, java, -version]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  template-route:
+    profiles: [core, full]
+    build:
+      context: ..
+      dockerfile: web/template-route/Dockerfile
+      args:
+        STATIC_WEB_IMAGE: ${MODERN_STATIC_WEB_IMAGE:?set an approved static web image}
+    ports:
+      - "18081:8080"
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/healthz]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  shell-bff:
+    profiles: [full]
+    build:
+      context: ..
+      dockerfile: services/shell-bff/Dockerfile
+      args:
+        JAVA_BUILD_IMAGE: ${MODERN_JAVA_BUILD_IMAGE:?set an approved build image}
+        JAVA_RUNTIME_IMAGE: ${MODERN_JAVA_RUNTIME_IMAGE:?set an approved runtime image}
+        ARTIFACTORY_MAVEN_URL: ${ARTIFACTORY_MAVEN_URL:?set the Maven repository URL}
+        ARTIFACTORY_GRADLE_PLUGIN_URL: ${ARTIFACTORY_GRADLE_PLUGIN_URL:?set the Gradle plugin repository URL}
+      secrets:
+        - artifactory_user
+        - artifactory_token
+        - corporate_ca
+    environment:
+      ENTRA_CLIENT_ID: shell-bff
+      ENTRA_CLIENT_SECRET: local-shell-bff-secret
+      ENTRA_ISSUER_URI: http://localhost:18084/realms/ofbiz-local
+      ENTRA_AUTHORIZATION_URI: http://localhost:18084/realms/ofbiz-local/protocol/openid-connect/auth
+      ENTRA_TOKEN_URI: http://local-oidc:8080/realms/ofbiz-local/protocol/openid-connect/token
+      ENTRA_JWK_SET_URI: http://local-oidc:8080/realms/ofbiz-local/protocol/openid-connect/certs
+      ENTRA_ALLOWED_TENANTS: local-tenant
+      LEGACY_BRIDGE_AUDIENCE: ${LEGACY_BRIDGE_AUDIENCE:-ofbiz-legacy}
+      LEGACY_BRIDGE_SIGNING_KEY: local-legacy-bridge-signing-key-32-bytes
+      SECURITY_COOKIE_SECURE: "false"
+      SECURITY_CSRF_COOKIE_NAME: XSRF-TOKEN
+      SERVER_SERVLET_SESSION_COOKIE_NAME: OFBIZ_SESSION
+      SERVER_SERVLET_SESSION_COOKIE_SECURE: "false"
+      CATALOG_SERVICE_BASE_URL: http://product-catalog-service:8080
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+    depends_on:
+      otel-collector:
+        condition: service_started
+      local-oidc:
+        condition: service_started
+      product-catalog-service:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, java, -version]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  local-oidc:
+    profiles: [full]
+    image: ${MODERN_OIDC_IMAGE:-quay.io/keycloak/keycloak:26.3.5@sha256:357829ec7c4693397533035092ad13b0644bcc95ded311f33a3738c4d9e9bdba}
+    command:
+      - start-dev
+      - --import-realm
+      - --hostname=http://localhost:18084
+      - --hostname-backchannel-dynamic=true
+    environment:
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/ofbiz-local-realm.json:/opt/keycloak/data/import/ofbiz-local-realm.json:ro
+    ports:
+      - "18084:8080"
+
+  product-catalog-service:
+    profiles: [core, full]
+    build:
+      context: ..
+      dockerfile: services/product-catalog-service/Dockerfile
+      args:
+        JAVA_BUILD_IMAGE: ${MODERN_JAVA_BUILD_IMAGE:?set an approved build image}
+        JAVA_RUNTIME_IMAGE: ${MODERN_JAVA_RUNTIME_IMAGE:?set an approved runtime image}
+        ARTIFACTORY_MAVEN_URL: ${ARTIFACTORY_MAVEN_URL:?set the Maven repository URL}
+        ARTIFACTORY_GRADLE_PLUGIN_URL: ${ARTIFACTORY_GRADLE_PLUGIN_URL:?set the Gradle plugin repository URL}
+      secrets:
+        - artifactory_user
+        - artifactory_token
+        - corporate_ca
+    environment:
+      CATALOG_DATABASE_URL: jdbc:postgresql://catalog-postgres:5432/product_catalog
+      CATALOG_DATABASE_USER: product_catalog
+      CATALOG_INGESTION_KEY: local-catalog-ingestion
+      CATALOG_LEGACY_SYNC_ENABLED: "true"
+      CATALOG_LEGACY_BASE_URL: http://legacy-ofbiz:8080
+      CATALOG_LEGACY_EXPORT_KEY: local-catalog-export
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+    secrets:
+      - source: catalog_postgres_password
+        target: catalog-postgres-password
+    depends_on:
+      catalog-postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    ports:
+      - "18083:8080"
+    healthcheck:
+      test: [CMD, java, -version]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  postgres:
+    profiles: [core, full]
+    image: ${MODERN_POSTGRES_IMAGE:?set an approved PostgreSQL image}
+    environment:
+      POSTGRES_DB: template_service
+      POSTGRES_USER: template_service
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - template-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U template_service -d template_service]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  catalog-postgres:
+    profiles: [core, full]
+    image: ${MODERN_POSTGRES_IMAGE:?set an approved PostgreSQL image}
+    environment:
+      POSTGRES_DB: product_catalog
+      POSTGRES_USER: product_catalog
+      POSTGRES_PASSWORD_FILE: /run/secrets/catalog-postgres-password
+    secrets:
+      - source: catalog_postgres_password
+        target: catalog-postgres-password
+    volumes:
+      - catalog-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U product_catalog -d product_catalog]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  otel-collector:
+    profiles: [core, full]
+    image: ${MODERN_OTEL_COLLECTOR_IMAGE:?set an approved OpenTelemetry image}
+    command: [--config=/etc/otelcol/config.yaml]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+
+  legacy-ofbiz:
+    profiles: [full]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: demo
+    image: ofbiz-modern-legacy:phase3
+    environment:
+      OFBIZ_CATALOG_EXPORT_KEY: local-catalog-export
+    ports:
+      - "18443:8443"
+
+  edge:
+    profiles: [full]
+    image: ${MODERN_STATIC_WEB_IMAGE:?set an approved static web image}
+    volumes:
+      - ./nginx-edge.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      template-service:
+        condition: service_healthy
+      template-route:
+        condition: service_healthy
+      shell-bff:
+        condition: service_healthy
+      legacy-ofbiz:
+        condition: service_started
+    ports:
+      - "18080:8080"
+
+volumes:
+  template-postgres:
+  catalog-postgres:
+
+secrets:
+  artifactory_user:
+    file: ${ARTIFACTORY_USER_FILE:?set the Artifactory username file path}
+  artifactory_token:
+    file: ${ARTIFACTORY_TOKEN_FILE:?set the Artifactory token file path}
+  corporate_ca:
+    file: ${CORPORATE_CA_FILE:?set the corporate CA file path}
+  postgres_password:
+    file: ${MODERN_POSTGRES_PASSWORD_FILE:?set the local PostgreSQL password file path}
+  catalog_postgres_password:
+    file: ${MODERN_CATALOG_POSTGRES_PASSWORD_FILE:-${MODERN_POSTGRES_PASSWORD_FILE:?set the catalog or shared local PostgreSQL password file path}}

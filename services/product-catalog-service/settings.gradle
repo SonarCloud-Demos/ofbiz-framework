@@ -1,0 +1,2 @@
+pluginManagement { repositories { } }
+rootProject.name = 'product-catalog-service'
