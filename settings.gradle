@@ -62,3 +62,7 @@ activeComponents().each { File component ->
         include subProject.replaceAll(fileSep, ':')
     
 }
+
+// Phase 1 modern modules are explicit so source cannot silently fall outside
+// the authoritative root Gradle graph.
+include ':services:platform-sample'

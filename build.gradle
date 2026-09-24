@@ -61,6 +61,9 @@ sonar {
                 'framework',
                 'themes',
                 'services',
+                'web',
+                'contracts',
+                'infra',
                 'local-dev',
                 'migration',
                 '.github',
@@ -166,6 +169,7 @@ apply from: 'dependencies.gradle'
 apply from: 'test-reports.gradle'
 apply from: 'framework/testtools/test-report-archive.gradle'
 apply from: 'gradle/phase0-inventory.gradle'
+apply from: 'gradle/modern-foundation.gradle'
 
 // global properties
 ext.os = System.getProperty('os.name').toLowerCase()

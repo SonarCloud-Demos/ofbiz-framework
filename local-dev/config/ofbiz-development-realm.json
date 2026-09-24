@@ -1,0 +1,8 @@
+{
+  "realm": "ofbiz-development",
+  "enabled": true,
+  "registrationAllowed": false,
+  "users": [{"username":"developer","firstName":"Local","lastName":"Developer","email":"developer@localhost.invalid","emailVerified":true,"enabled":true,"requiredActions":[],"credentials":[{"type":"password","value":"local-development-only","temporary":false}],"realmRoles":["development-user"]}],
+  "roles": {"realm":[{"name":"development-user"}]},
+  "clients": [{"clientId":"modern-shell","enabled":true,"publicClient":true,"directAccessGrantsEnabled":true,"redirectUris":["http://localhost:8080/*"],"webOrigins":["http://localhost:8080"]}]
+}

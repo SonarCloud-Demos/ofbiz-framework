@@ -1,0 +1,107 @@
+name: ofbiz-modern
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local-postgres-only
+    volumes:
+      - ./config/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    ports: ["127.0.0.1:55432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  database-policy:
+    image: postgres:17-alpine
+    environment:
+      PGPASSWORD: local-postgres-only
+    command: ["sh", "-c", "psql --host=postgres --username=postgres --dbname=postgres --file=/policy/enforce-isolation.sql && touch /tmp/policy-ready && exec tail -f /dev/null"]
+    volumes:
+      - ./config/enforce-isolation.sql:/policy/enforce-isolation.sql:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/policy-ready"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+  messaging:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: modern
+      RABBITMQ_DEFAULT_PASS: local-messaging-only
+    ports: ["127.0.0.1:15672:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  storage:
+    build:
+      context: ./storage-emulator
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:10000/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports: ["127.0.0.1:10000:10000"]
+  identity:
+    image: quay.io/keycloak/keycloak:26.3
+    command: start-dev --import-realm --health-enabled=true
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: local-identity-only
+    volumes:
+      - ./config/ofbiz-development-realm.json:/opt/keycloak/data/import/ofbiz-development-realm.json:ro
+    ports: ["127.0.0.1:8180:8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3; grep -q UP <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+  telemetry:
+    image: otel/opentelemetry-collector-contrib:0.136.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./config/otel-collector.yaml:/etc/otel/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "components"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  platform-sample:
+    build:
+      context: ../services/platform-sample
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      database-policy: {condition: service_healthy}
+      messaging: {condition: service_healthy}
+  legacy-ofbiz:
+    build:
+      context: ..
+      target: demo
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://localhost:8443/webtools/control/main"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+  shell:
+    build:
+      context: ../web/shell
+    ports: ["8080:8080"]
+    depends_on:
+      platform-sample: {condition: service_healthy}
+      legacy-ofbiz: {condition: service_healthy}
+      identity: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/modern/platform"]
+      interval: 5s
+      timeout: 2s
+      retries: 30

@@ -1,0 +1,4 @@
+REVOKE CONNECT ON DATABASE platform FROM PUBLIC;
+REVOKE CONNECT ON DATABASE isolation_probe FROM PUBLIC;
+GRANT CONNECT ON DATABASE platform TO platform_owner;
+GRANT CONNECT ON DATABASE isolation_probe TO isolation_probe;

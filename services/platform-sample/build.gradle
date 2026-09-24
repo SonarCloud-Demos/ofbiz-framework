@@ -1,0 +1,24 @@
+plugins {
+    id 'application'
+    id 'jacoco'
+}
+
+group = 'org.apache.ofbiz.modern'
+version = '0.1.0-SNAPSHOT'
+repositories { mavenCentral() }
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+application { mainClass = 'org.apache.ofbiz.modern.platform.PlatformSampleApplication' }
+test { useJUnitPlatform() }
+jacocoTestReport { reports { xml.required = true } }
+check.dependsOn jacocoTestReport
+tasks.register('containerJar', Jar) {
+    archiveClassifier = 'all'
+    manifest { attributes 'Main-Class': application.mainClass.get() }
+    from sourceSets.main.output
+}
+build.dependsOn containerJar
