@@ -15,6 +15,7 @@ The project explicitly accepted beginning the slice with named owners unassigned
 - [Projection runbook](projection-runbook.md) defines idempotent backfill, reconciliation and recovery.
 - [Change-capture decision](change-capture.md) defines the transitional polling boundary and the event-driven replacement gate.
 - [Browser acceptance](browser-acceptance.md) records automated accessibility, keyboard and fallback coverage.
+- [Demo-data golden master](golden-master.md) records deterministic legacy-to-modern comparisons and their non-production boundary.
 - The [migration ledger](../phase0/migration-ledger.csv) tracks cutover state and ownership.
 - The [initial slice backlog](../phase0/slice-backlog.md) records the selection decision and alternatives.
 
@@ -29,9 +30,10 @@ The local hybrid stack now demonstrates:
 5. service, BFF, Groovy, contract/schema, Compose and expanded hybrid smoke checks;
 6. search throttling and browser security headers at the same-origin edge;
 7. PostgreSQL integration tests for Flyway migrations, idempotent updates and guarded reconciliation (executed when Docker is available);
-8. Chromium keyboard, WCAG A/AA, disabled-route fallback and sanitized service-failure tests.
+8. Chromium keyboard, WCAG A/AA, disabled-route fallback and sanitized service-failure tests;
+9. committed-demo category, membership, field, ordering, relevance and zero-result golden comparisons against modern PostgreSQL behavior.
 
-The route manifest intentionally remains `candidate` and the catalog page has no Modern experience marker. Deployed-storefront characterization, production-like reconciliation/load evidence, numeric SLOs, a deployed fallback drill and operational ownership remain open.
+The route manifest intentionally remains `candidate` and the catalog page has no Modern experience marker. Production-derived relevance acceptance, deployed-storefront characterization, production-like reconciliation/load evidence, numeric SLOs, a deployed fallback drill and operational ownership remain open.
 
 ## Implemented service increment
 

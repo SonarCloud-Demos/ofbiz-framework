@@ -26,6 +26,10 @@ dependencies {
 }
 
 java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
-test { useJUnitPlatform() }
+test {
+    useJUnitPlatform()
+    systemProperty 'catalogGoldenFixture', rootProject.file('contracts/fixtures/product-catalog-demo-golden.json').absolutePath
+    systemProperty 'catalogGoldenSource', rootProject.file('applications/datamodel/data/demo/OrderDemoData.xml').absolutePath
+}
 jacocoTestReport { reports { xml.required = true } }
 check.dependsOn jacocoTestReport

@@ -4,7 +4,7 @@ def modernSourceRoots = [
         'services/platform-sample', 'services/shell-bff', 'services/identity-access',
         'services/ofbiz-adapter', 'services/product-catalog-service',
         'web/shell', 'web/routes/platform-test', 'web/routes/product-catalog',
-        'web/packages/design-system', 'contracts/openapi', 'contracts/events',
+        'web/packages/design-system', 'contracts/openapi', 'contracts/events', 'contracts/fixtures',
         'infra/bootstrap', 'infra/modules', 'infra/environments', 'local-dev'
 ] as Set
 
@@ -52,9 +52,75 @@ tasks.register('modernContractCheck') {
         assert catalogApi.contains('/api/catalog/v1/search:')
         def catalogIngestionApi = file('contracts/openapi/product-catalog-ingestion.yaml').text
         assert catalogIngestionApi.contains('/internal/catalog/projection/batches:')
+        def catalogGolden = new JsonSlurper().parse(file('contracts/fixtures/product-catalog-demo-golden.json'))
+        assert catalogGolden.fixtureVersion == 1
+        assert catalogGolden.evidence.productionEvidence == false
+        assert !catalogGolden.browseCases.empty && !catalogGolden.searchCases.empty
         def event = new JsonSlurper().parse(file('contracts/events/platform-sample.schema.json'))
         assert event.'$schema' && event.type == 'object'
         assert event.required.containsAll(['id', 'occurredAt', 'type'])
+    }
+}
+
+tasks.register('modernCatalogGoldenCheck') {
+    group = 'verification'
+    inputs.files('contracts/fixtures/product-catalog-demo-golden.json',
+            'applications/datamodel/data/demo/OrderDemoData.xml')
+    doLast {
+        def golden = new JsonSlurper().parse(file('contracts/fixtures/product-catalog-demo-golden.json'))
+        def demo = new groovy.xml.XmlSlurper(false, false)
+                .parse(file('applications/datamodel/data/demo/OrderDemoData.xml'))
+        def categories = demo.ProductCategory.collectEntries { node ->
+            String id = node.@productCategoryId.text()
+            [(id): [categoryId: id, parentCategoryId: node.@primaryParentCategoryId.text() ?: null,
+                    name: node.@categoryName.text() ?: node.@description.text() ?: id,
+                    description: node.@longDescription.text() ?: node.@description.text() ?: null]]
+        }
+        def products = demo.Product.collectEntries { node ->
+            String id = node.@productId.text()
+            [(id): [productId: id, name: node.@productName.text() ?: node.@internalName.text() ?: id,
+                    description: node.@description.text() ?: null,
+                    productType: node.@productTypeId.text() ?: 'UNKNOWN',
+                    virtual: node.@isVirtual.text() == 'Y', variant: node.@isVariant.text() == 'Y']]
+        }
+        def memberships = demo.ProductCategoryMember.collect { node ->
+            String sequence = node.@sequenceNum.text()
+            [categoryId: node.@productCategoryId.text(), productId: node.@productId.text(),
+             sequence: sequence ? new BigDecimal(sequence) : null]
+        }
+
+        golden.categories.each { expected ->
+            def actual = categories[expected.categoryId]
+            assert actual != null: "Demo category ${expected.categoryId} is missing"
+            assert actual.subMap(['categoryId', 'name', 'description']) == expected.subMap(['categoryId', 'name', 'description'])
+            def children = categories.values().findAll { it.parentCategoryId == expected.categoryId }
+                    .sort { left, right -> left.categoryId <=> right.categoryId }
+                    .collect { it.categoryId }
+            assert children == expected.childCategoryIds: "Category ${expected.categoryId} children drifted"
+        }
+        golden.products.each { expected ->
+            assert products[expected.productId] == expected: "Product ${expected.productId} fields drifted"
+        }
+        golden.browseCases.each { expected ->
+            def ids = memberships.findAll { it.categoryId == expected.categoryId }
+                    .sort { left, right ->
+                        int sequence = (left.sequence == null ? new BigDecimal('1E100') : left.sequence) <=>
+                                (right.sequence == null ? new BigDecimal('1E100') : right.sequence)
+                        sequence != 0 ? sequence : left.productId <=> right.productId
+                    }.collect { it.productId }
+            assert ids == expected.expectedProductIds: "Browse ordering for ${expected.categoryId} drifted"
+        }
+        golden.searchCases.each { expected ->
+            String query = expected.query.toLowerCase(Locale.ROOT)
+            def ids = products.values().findAll {
+                it.name.toLowerCase(Locale.ROOT).contains(query) ||
+                        (it.description ?: '').toLowerCase(Locale.ROOT).contains(query)
+            }.sort { left, right ->
+                int name = left.name.toLowerCase(Locale.ROOT) <=> right.name.toLowerCase(Locale.ROOT)
+                name != 0 ? name : left.productId <=> right.productId
+            }.collect { it.productId }
+            assert ids == expected.expectedProductIds: "Search results for '${expected.query}' drifted"
+        }
     }
 }
 
@@ -115,7 +181,7 @@ tasks.register('verifyModernBuildRegistration') {
             candidates << "services/${it.name}"
         }
         ['web/shell', 'web/routes/platform-test', 'web/routes/product-catalog', 'web/packages/design-system',
-         'contracts/openapi', 'contracts/events', 'infra/bootstrap', 'infra/modules',
+         'contracts/openapi', 'contracts/events', 'contracts/fixtures', 'infra/bootstrap', 'infra/modules',
          'infra/environments', 'local-dev'].each { if (file(it).exists()) candidates << it }
         def missing = candidates.findAll { !modernSourceRoots.contains(it.toString()) }
         assert missing.empty: "Modern source roots are not registered: ${missing.sort()}"
@@ -125,10 +191,12 @@ tasks.register('verifyModernBuildRegistration') {
 tasks.named('check') {
     dependsOn ':services:platform-sample:check', ':services:shell-bff:check', ':services:identity-access:check',
             ':services:ofbiz-adapter:check', ':services:product-catalog-service:check', modernWebCheck, modernContractCheck,
+            modernCatalogGoldenCheck,
             modernInfraCheck, modernLocalDevCheck, verifyModernBuildRegistration
 }
 tasks.named('build') {
     dependsOn ':services:platform-sample:build', ':services:shell-bff:build', ':services:identity-access:build',
             ':services:ofbiz-adapter:build', ':services:product-catalog-service:build', modernWebCheck, modernContractCheck,
+            modernCatalogGoldenCheck,
             modernInfraCheck, modernLocalDevCheck, verifyModernBuildRegistration
 }

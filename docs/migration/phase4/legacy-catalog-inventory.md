@@ -88,5 +88,5 @@ The fixture is suitable for contract, ordering, pagination, empty-result, invali
 - Confirm whether anonymous browsing is permitted and which catalog/store is selected per host.
 - Record production result fields, URL/SEO behavior, locale fallbacks and content sanitization.
 - Measure catalog size, query mix, peak rate and latency percentiles.
-- Establish relevance golden cases with business acceptance.
+- Extend the committed-demo golden cases with production-derived relevance cases and business acceptance before traffic cutover.
 - Decide whether out-of-stock filtering belongs in the first UI; Inventory remains the fact owner.

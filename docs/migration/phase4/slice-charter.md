@@ -109,7 +109,7 @@ Engineering, product, data, security/privacy and SRE owners, the primary on-call
 - [ ] Deployed customer-facing legacy routes and dependencies are enumerated; repository-static inventory is complete.
 - [x] One deterministic repository dataset is selected and classified for contract tests; production-like data remains required for cutover evidence.
 - [x] Initial Product Catalog fields are bounded; any later cross-context read contract still requires explicit approval.
-- [ ] Golden-master browse/search cases are committed and reproducible.
+- [x] Committed-demo golden-master browse/search cases are reproducible; production-derived relevance acceptance remains deferred.
 - [ ] Baseline volume, latency and relevance measurements are recorded.
 - [x] Backfill, transitional change capture, reconciliation and rebuild designs are recorded; production-like execution evidence remains required.
 - [ ] Numeric SLO, RPO/RTO and reconciliation thresholds are approved.
