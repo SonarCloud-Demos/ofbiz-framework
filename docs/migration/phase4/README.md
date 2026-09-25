@@ -14,6 +14,7 @@ The project explicitly accepted beginning the slice with named owners unassigned
 - [Projection ingestion OpenAPI](../../../contracts/openapi/product-catalog-ingestion.yaml) fixes the private migration boundary.
 - [Projection runbook](projection-runbook.md) defines idempotent backfill, reconciliation and recovery.
 - [Change-capture decision](change-capture.md) defines the transitional polling boundary and the event-driven replacement gate.
+- [Browser acceptance](browser-acceptance.md) records automated accessibility, keyboard and fallback coverage.
 - The [migration ledger](../phase0/migration-ledger.csv) tracks cutover state and ownership.
 - The [initial slice backlog](../phase0/slice-backlog.md) records the selection decision and alternatives.
 
@@ -27,9 +28,10 @@ The local hybrid stack now demonstrates:
 4. denial of unauthenticated catalog BFF requests;
 5. service, BFF, Groovy, contract/schema, Compose and expanded hybrid smoke checks;
 6. search throttling and browser security headers at the same-origin edge;
-7. PostgreSQL integration tests for Flyway migrations, idempotent updates and guarded reconciliation (executed when Docker is available).
+7. PostgreSQL integration tests for Flyway migrations, idempotent updates and guarded reconciliation (executed when Docker is available);
+8. Chromium keyboard, WCAG A/AA, disabled-route fallback and sanitized service-failure tests.
 
-The route manifest intentionally remains `candidate` and the catalog page has no Modern experience marker. Browser accessibility evidence, deployed-storefront characterization, production-like reconciliation/load evidence, numeric SLOs, fallback proof and operational ownership remain open.
+The route manifest intentionally remains `candidate` and the catalog page has no Modern experience marker. Deployed-storefront characterization, production-like reconciliation/load evidence, numeric SLOs, a deployed fallback drill and operational ownership remain open.
 
 ## Implemented service increment
 
@@ -43,4 +45,4 @@ The route manifest intentionally remains `candidate` and the catalog page has no
 - liveness/readiness endpoints, an executable Spring Boot artifact and a non-root container image;
 - focused tests for category navigation, pagination, empty search and invalid cursors.
 
-Projection ingestion, guarded snapshot reconciliation, the narrow OFBiz/adapter export boundary, transitional polling change capture, the automated non-destructive backfill coordinator, the BFF and the modern UI candidate route are implemented. The local coordinator keeps reconciliation disabled because an HTTP cutoff does not provide a cross-request database snapshot. Accessibility/browser automation, production-like reconciliation/load evidence and the tested end-to-end route fallback remain open.
+Projection ingestion, guarded snapshot reconciliation, the narrow OFBiz/adapter export boundary, transitional polling change capture, the automated non-destructive backfill coordinator, the BFF and the modern UI candidate route are implemented. The local coordinator keeps reconciliation disabled because an HTTP cutoff does not provide a cross-request database snapshot. Browser accessibility and route-level fallback are automated; production-like reconciliation/load evidence and a deployed fallback drill remain open.
