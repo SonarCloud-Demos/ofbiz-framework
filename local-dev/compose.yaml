@@ -98,8 +98,8 @@ services:
       COOKIE_SECURE: "false"
       PLATFORM_ROUTE_PERCENT: "100"
       PLATFORM_ROUTE_DISABLED: "false"
-      CATALOG_ROUTE_PERCENT: "100"
-      CATALOG_ROUTE_DISABLED: "false"
+      CATALOG_ROUTE_PERCENT: "${CATALOG_ROUTE_PERCENT:-100}"
+      CATALOG_ROUTE_DISABLED: "${CATALOG_ROUTE_DISABLED:-false}"
       IDENTITY_EXCHANGE_URL: http://identity-access:8083/internal/exchanges
       WORKLOAD_TOKEN: local-workload-token-local-workload-token-local-workload-token-1234567890
     healthcheck:

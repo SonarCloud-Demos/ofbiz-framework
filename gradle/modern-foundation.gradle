@@ -155,7 +155,8 @@ tasks.register('modernInfraCheck') {
 
 tasks.register('modernLocalDevCheck') {
     group = 'verification'
-    inputs.files('local-dev/compose.yaml', 'local-dev/fixtures/platform.json')
+    inputs.files('local-dev/compose.yaml', 'local-dev/fixtures/platform.json',
+            'local-dev/fallback-drill.sh', 'modern')
     doLast {
         def compose = file('local-dev/compose.yaml').text
         ['shell', 'shell-bff', 'identity-access', 'ofbiz-adapter', 'product-catalog', 'platform-sample', 'legacy-ofbiz', 'postgres', 'database-policy', 'messaging',
@@ -163,6 +164,15 @@ tasks.register('modernLocalDevCheck') {
             assert compose.contains("  ${it}:"): "Compose service ${it} is missing"
         }
         assert new JsonSlurper().parse(file('local-dev/fixtures/platform.json')).fixtureVersion == 1
+        assert compose.contains('CATALOG_ROUTE_DISABLED: "${CATALOG_ROUTE_DISABLED:-false}"')
+        assert file('modern').text.contains('fallback-drill)')
+        def fallbackDrill = file('local-dev/fallback-drill.sh').text
+        ['stop product-catalog', 'CATALOG_ROUTE_DISABLED=true', 'CATALOG_ROUTE_DISABLED=false',
+         '"error":"route_disabled"', '/auth/legacy'].each {
+            assert fallbackDrill.contains(it): "Fallback drill control ${it} is missing"
+        }
+        assert file('docs/migration/phase4/slo-load-deferral.md').text.contains('does not authorize production traffic')
+        assert file('docs/migration/phase4/support-runbook.md').text.contains('./modern fallback-drill')
     }
 }
 

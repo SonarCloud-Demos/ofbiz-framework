@@ -33,8 +33,11 @@ case "$command" in
   smoke)
     exec "$root_dir/local-dev/smoke-test.sh" "$@"
     ;;
+  fallback-drill)
+    exec "$root_dir/local-dev/fallback-drill.sh" "$@"
+    ;;
   help|-h|--help)
-    echo 'Usage: ./modern {bootstrap|build|test|up|down|logs|smoke}'
+    echo 'Usage: ./modern {bootstrap|build|test|up|down|logs|smoke|fallback-drill}'
     ;;
   *) echo "Unknown command: $command" >&2; exit 2 ;;
 esac

@@ -94,6 +94,8 @@ Numeric targets remain **TBD** pending baseline measurements. The approved targe
 - RPO/RTO, backup restoration and projection rebuild time;
 - accessibility conformance and supported browsers.
 
+Repository work proceeds under the development-only deferral in `slo-load-deferral.md`. The deferral does not satisfy or remove any production cutover criterion.
+
 ## Cutover and rollback
 
 Ramp reads through staff, a small stable cohort and then increasing traffic. At every stage compare latency, errors, result counts, field values and agreed business signals. A kill switch must route the entire journey back to the legacy route without changing product data.
@@ -112,6 +114,7 @@ Engineering, product, data, security/privacy and SRE owners, the primary on-call
 - [x] Committed-demo golden-master browse/search cases are reproducible; production-derived relevance acceptance remains deferred.
 - [ ] Baseline volume, latency and relevance measurements are recorded.
 - [x] Backfill, transitional change capture, reconciliation and rebuild designs are recorded; production-like execution evidence remains required.
-- [ ] Numeric SLO, RPO/RTO and reconciliation thresholds are approved.
+- [ ] Numeric SLO, RPO/RTO and reconciliation thresholds are approved (development-only deferral recorded).
 - [ ] OpenAPI service contract is committed; lint/compatibility automation and the BFF contract remain required.
-- [ ] Threat model, accessibility plan, fallback test and support runbook are approved.
+- [x] Browser accessibility plan, repository fallback tests and the support runbook are recorded; a deployed drill remains required.
+- [ ] Product Catalog threat model is approved.

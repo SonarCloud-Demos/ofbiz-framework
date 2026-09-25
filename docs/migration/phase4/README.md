@@ -16,6 +16,8 @@ The project explicitly accepted beginning the slice with named owners unassigned
 - [Change-capture decision](change-capture.md) defines the transitional polling boundary and the event-driven replacement gate.
 - [Browser acceptance](browser-acceptance.md) records automated accessibility, keyboard and fallback coverage.
 - [Demo-data golden master](golden-master.md) records deterministic legacy-to-modern comparisons and their non-production boundary.
+- [SLO/load deferral](slo-load-deferral.md) records the development-only exception and mandatory production reopen conditions.
+- [Support runbook](support-runbook.md) defines detection, complete route fallback, recovery and escalation gates.
 - The [migration ledger](../phase0/migration-ledger.csv) tracks cutover state and ownership.
 - The [initial slice backlog](../phase0/slice-backlog.md) records the selection decision and alternatives.
 
@@ -33,7 +35,7 @@ The local hybrid stack now demonstrates:
 8. Chromium keyboard, WCAG A/AA, disabled-route fallback and sanitized service-failure tests;
 9. committed-demo category, membership, field, ordering, relevance and zero-result golden comparisons against modern PostgreSQL behavior.
 
-The route manifest intentionally remains `candidate` and the catalog page has no Modern experience marker. Production-derived relevance acceptance, deployed-storefront characterization, production-like reconciliation/load evidence, numeric SLOs, a deployed fallback drill and operational ownership remain open.
+The route manifest intentionally remains `candidate` and the catalog page has no Modern experience marker. Numeric SLO/load work is explicitly deferred for development, and production-derived relevance acceptance, deployed-storefront characterization, production-like reconciliation, a deployed fallback drill and operational ownership remain open.
 
 ## Implemented service increment
 
@@ -47,4 +49,4 @@ The route manifest intentionally remains `candidate` and the catalog page has no
 - liveness/readiness endpoints, an executable Spring Boot artifact and a non-root container image;
 - focused tests for category navigation, pagination, empty search and invalid cursors.
 
-Projection ingestion, guarded snapshot reconciliation, the narrow OFBiz/adapter export boundary, transitional polling change capture, the automated non-destructive backfill coordinator, the BFF and the modern UI candidate route are implemented. The local coordinator keeps reconciliation disabled because an HTTP cutoff does not provide a cross-request database snapshot. Browser accessibility and route-level fallback are automated; production-like reconciliation/load evidence and a deployed fallback drill remain open.
+Projection ingestion, guarded snapshot reconciliation, the narrow OFBiz/adapter export boundary, transitional polling change capture, the automated non-destructive backfill coordinator, the BFF and the modern UI candidate route are implemented. The local coordinator keeps reconciliation disabled because an HTTP cutoff does not provide a cross-request database snapshot. Browser accessibility, route-level fallback and a reversible local hybrid fallback drill are automated; production-like reconciliation/load evidence and a deployed fallback drill remain open.
