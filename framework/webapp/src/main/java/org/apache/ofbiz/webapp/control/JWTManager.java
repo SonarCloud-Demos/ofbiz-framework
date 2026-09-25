@@ -111,7 +111,9 @@ public class JWTManager {
     public static String checkJWTLogin(HttpServletRequest request, HttpServletResponse response) {
         Delegator delegator = (Delegator) request.getAttribute("delegator");
 
-        if (!"true".equals(EntityUtilProperties.getPropertyValue("security", "security.internal.sso.enabled", "false", delegator))) {
+        boolean legacyExchangeEnabled = "true".equals(System.getenv("OFBIZ_LEGACY_EXCHANGE_ENABLED"));
+        if (!legacyExchangeEnabled
+                && !"true".equals(EntityUtilProperties.getPropertyValue("security", "security.internal.sso.enabled", "false", delegator))) {
             if (Debug.verboseOn()) {
                 Debug.logVerbose("Internal single sign on is disabled.", MODULE);
             }
@@ -162,7 +164,8 @@ public class JWTManager {
      * @return the JWT secret key
      */
     private static String getJWTKey(Delegator delegator, String salt) {
-        String key = UtilProperties.getPropertyValue("security", "security.token.key");
+        String exchangeKey = System.getenv("OFBIZ_LEGACY_EXCHANGE_KEY");
+        String key = UtilValidate.isNotEmpty(exchangeKey) ? exchangeKey : UtilProperties.getPropertyValue("security", "security.token.key");
         if (key.length() < 64) { // The key must be 512 bits (ie 64 chars)  as we use HMAC512 to create the token, cf. OFBIZ-12724
             throw new SecurityException("The JWT secret key is too short. It must be at least 512 bites.");
         }

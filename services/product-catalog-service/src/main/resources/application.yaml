@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: product-catalog-service
+  datasource:
+    url: ${CATALOG_DATABASE_URL:jdbc:postgresql://localhost:5432/product_catalog}
+    username: ${CATALOG_DATABASE_USER:product_catalog}
+    password: ${CATALOG_DATABASE_PASSWORD:}
+  flyway:
+    locations: classpath:db/migration
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+server:
+  port: ${PORT:8080}
+catalog:
+  ingestion-key: ${CATALOG_INGESTION_KEY}
+  backfill:
+    enabled: ${CATALOG_BACKFILL_ENABLED:false}
+    reconcile-enabled: ${CATALOG_BACKFILL_RECONCILE_ENABLED:false}
+    adapter-url: ${CATALOG_ADAPTER_URL:http://ofbiz-adapter:8084}
+    workload-token: ${CATALOG_ADAPTER_WORKLOAD_TOKEN:}
+    page-size: ${CATALOG_BACKFILL_PAGE_SIZE:200}
+    interval: ${CATALOG_BACKFILL_INTERVAL:PT5M}

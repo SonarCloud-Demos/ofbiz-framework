@@ -23,6 +23,18 @@
   Verifies all GitHub Actions refs are on the ASF allowlist
   → Trigger: push / PR on `.github/` path
 
+- `terraform.yml`
+  Formats, validates, mock-tests, security-scans, and plans the Azure platform with OIDC; protected applies require a retained reviewed plan.
+
+- `promote-modern.yml`
+  Promotes an immutable scanned digest independently of Terraform, canaries it, smoke-tests it, and rolls traffic back on failure.
+
+- `modern-image.yml`
+  Builds the sample service and shell, emits SBOMs, gates vulnerabilities, pushes to ACR, and signs/attests the immutable images.
+
+- `ephemeral-environment.yml`
+  Creates labelled PR environments with isolated state, budgets, expiry tags, close cleanup, and scheduled TTL enforcement.
+
 ### Workflow behavior
 
 - `push` → uses the workflow from the target branch  

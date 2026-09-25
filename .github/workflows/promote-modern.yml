@@ -1,0 +1,88 @@
+name: Promote modern sample
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        options: [dev, staging]
+      image_digest:
+        description: Previously scanned image digest to promote
+        required: true
+        type: string
+      shell_image_digest:
+        description: Previously scanned shell image digest to promote
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: azure-${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+        with:
+          cosign-release: v2.6.0
+      - name: Verify immutable promotion input
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          SHELL_IMAGE_DIGEST: ${{ inputs.shell_image_digest }}
+        run: |
+          case "$IMAGE_DIGEST" in
+            sha256:*) ;;
+            *) echo "image_digest must start with sha256:" >&2; exit 1 ;;
+          esac
+          case "$SHELL_IMAGE_DIGEST" in
+            sha256:*) ;;
+            *) echo "shell_image_digest must start with sha256:" >&2; exit 1 ;;
+          esac
+      - name: Scan promoted image
+        run: |
+          az acr login --name "${{ vars.ACR_NAME }}"
+          cosign verify --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" --certificate-oidc-issuer https://token.actions.githubusercontent.com "${{ vars.ACR_LOGIN_SERVER }}/platform-sample@${{ inputs.image_digest }}"
+          cosign verify --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" --certificate-oidc-issuer https://token.actions.githubusercontent.com "${{ vars.ACR_LOGIN_SERVER }}/web-shell@${{ inputs.shell_image_digest }}"
+          docker run --rm aquasec/trivy:0.67.2 image --exit-code 1 --severity HIGH,CRITICAL "${{ vars.ACR_LOGIN_SERVER }}/platform-sample@${{ inputs.image_digest }}"
+          docker run --rm aquasec/trivy:0.67.2 image --exit-code 1 --severity HIGH,CRITICAL "${{ vars.ACR_LOGIN_SERVER }}/web-shell@${{ inputs.shell_image_digest }}"
+      - name: Deploy canary revision
+        id: deploy
+        run: |
+          previous=$(az containerapp show -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n platform-sample --query properties.latestReadyRevisionName -o tsv)
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          shell_previous=$(az containerapp show -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n web-shell --query properties.latestReadyRevisionName -o tsv)
+          echo "shell_previous=$shell_previous" >> "$GITHUB_OUTPUT"
+          az containerapp update -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n platform-sample --image "${{ vars.ACR_LOGIN_SERVER }}/platform-sample@${{ inputs.image_digest }}" --revision-suffix "${GITHUB_SHA::8}"
+          az containerapp update -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n web-shell --image "${{ vars.ACR_LOGIN_SERVER }}/web-shell@${{ inputs.shell_image_digest }}" --revision-suffix "${GITHUB_SHA::8}"
+          az containerapp ingress traffic set -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n platform-sample --revision-weight latest=10 "$previous=90"
+          az containerapp ingress traffic set -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n web-shell --revision-weight latest=10 "$shell_previous=90"
+      - name: Smoke and promote
+        run: |
+          curl --fail --retry 12 --retry-delay 5 "${{ vars.PLATFORM_SMOKE_URL }}/health/ready"
+          az containerapp ingress traffic set -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n platform-sample --revision-weight latest=100
+          az containerapp ingress traffic set -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n web-shell --revision-weight latest=100
+      - name: Roll back unhealthy canary
+        if: failure() && steps.deploy.outputs.previous != ''
+        run: |
+          az containerapp ingress traffic set -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n platform-sample --revision-weight "${{ steps.deploy.outputs.previous }}=100"
+          az containerapp ingress traffic set -g "${{ vars.CONTAINER_APP_RESOURCE_GROUP }}" -n web-shell --revision-weight "${{ steps.deploy.outputs.shell_previous }}=100"
+      - name: Record compatible release
+        if: success()
+        run: |
+          jq -n --arg environment "${{ inputs.environment }}" --arg revision "$GITHUB_SHA" --arg sample "${{ inputs.image_digest }}" --arg shell "${{ inputs.shell_image_digest }}" '{environment:$environment, repositoryRevision:$revision, images:{platformSample:$sample, webShell:$shell}}' > compatible-release.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: success()
+        with:
+          name: compatible-release-${{ inputs.environment }}-${{ github.sha }}
+          path: compatible-release.json
+          retention-days: 90

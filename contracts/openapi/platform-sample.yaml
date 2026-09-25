@@ -1,0 +1,24 @@
+openapi: 3.1.0
+info: {title: Platform sample API, version: 0.1.0}
+paths:
+  /health/ready:
+    get:
+      operationId: readiness
+      responses: {'200': {description: Ready}}
+  /api/platform:
+    get:
+      operationId: platformStatus
+      responses:
+        '200':
+          description: Platform status
+          content: {application/json: {schema: {$ref: '#/components/schemas/PlatformStatus'}}}
+components:
+  schemas:
+    PlatformStatus:
+      type: object
+      required: [service, status, correlationId, timestamp]
+      properties:
+        service: {const: platform-sample}
+        status: {const: ready}
+        correlationId: {type: string}
+        timestamp: {type: string, format: date-time}

@@ -1,0 +1,67 @@
+name: Build modern image
+
+on:
+  push:
+    branches: [trunk]
+    paths: ["services/platform-sample/**", ".github/workflows/modern-image.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  attestations: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    environment: azure-dev
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          java-version: 17
+          distribution: zulu
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+        with:
+          cosign-release: v2.6.0
+      - name: Build and test service
+        run: |
+          chmod +x gradlew gradle/init-gradle-wrapper.sh
+          ./gradle/init-gradle-wrapper.sh
+          ./gradlew :services:platform-sample:build modernWebCheck
+      - name: Build immutable image
+        run: |
+          docker build --pull -t "${{ vars.ACR_LOGIN_SERVER }}/platform-sample:${GITHUB_SHA}" services/platform-sample
+          docker build --pull -t "${{ vars.ACR_LOGIN_SERVER }}/web-shell:${GITHUB_SHA}" web/shell
+      - name: Generate SBOM
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/work" anchore/syft:v1.33.0 "${{ vars.ACR_LOGIN_SERVER }}/platform-sample:${GITHUB_SHA}" -o spdx-json=/work/platform-sample.spdx.json
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/work" anchore/syft:v1.33.0 "${{ vars.ACR_LOGIN_SERVER }}/web-shell:${GITHUB_SHA}" -o spdx-json=/work/web-shell.spdx.json
+      - name: Vulnerability gate
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.2 image --exit-code 1 --severity HIGH,CRITICAL "${{ vars.ACR_LOGIN_SERVER }}/platform-sample:${GITHUB_SHA}"
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.2 image --exit-code 1 --severity HIGH,CRITICAL "${{ vars.ACR_LOGIN_SERVER }}/web-shell:${GITHUB_SHA}"
+      - name: Push to ACR
+        run: |
+          az acr login --name "${{ vars.ACR_NAME }}"
+          docker push "${{ vars.ACR_LOGIN_SERVER }}/platform-sample:${GITHUB_SHA}"
+          docker push "${{ vars.ACR_LOGIN_SERVER }}/web-shell:${GITHUB_SHA}"
+      - name: Sign and attest keylessly
+        run: |
+          cosign sign --yes "${{ vars.ACR_LOGIN_SERVER }}/platform-sample:${GITHUB_SHA}"
+          cosign attest --yes --type spdxjson --predicate platform-sample.spdx.json "${{ vars.ACR_LOGIN_SERVER }}/platform-sample:${GITHUB_SHA}"
+          cosign sign --yes "${{ vars.ACR_LOGIN_SERVER }}/web-shell:${GITHUB_SHA}"
+          cosign attest --yes --type spdxjson --predicate web-shell.spdx.json "${{ vars.ACR_LOGIN_SERVER }}/web-shell:${GITHUB_SHA}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: platform-sample-sbom-${{ github.sha }}
+          path: |
+            platform-sample.spdx.json
+            web-shell.spdx.json
+          retention-days: 90

@@ -1,0 +1,368 @@
+import groovy.json.JsonOutput
+import groovy.xml.XmlSlurper
+
+/*
+ * Generates the static, repository-derived evidence used by migration Phase 0.
+ * Keep this dependency-free so it runs with the existing Gradle distribution.
+ */
+
+def phase0GeneratedDir = file('docs/migration/phase0/generated')
+
+def relativePath = { File source ->
+    rootDir.toPath().relativize(source.toPath()).toString().replace(File.separator, '/')
+}
+
+def xmlFilesUnder = { File directory ->
+    directory.exists()
+            ? fileTree(directory) { include '**/*.xml' }.files.sort { relativePath(it) }
+            : []
+}
+
+def parseXml = { File source ->
+    try {
+        // Catalogs and a small number of workflow fixtures use a DOCTYPE. They are not
+        // architecture registration metadata, and parsing them would require enabling
+        // external entity processing in the build, so deliberately exclude them.
+        if (source.getText('UTF-8').contains('<!DOCTYPE')) {
+            return null
+        }
+        return new XmlSlurper(false, false).parse(source)
+    } catch (Exception ignored) {
+        return null
+    }
+}
+
+def componentNameFor = { File source, List<Map<String, Object>> components ->
+    String path = relativePath(source)
+    Map<String, Object> match = components.findAll { path.startsWith("${it.path}/") }
+            .max { it.path.toString().length() }
+    match?.name ?: 'root'
+}
+
+def generateInventory = { File destination ->
+    destination.mkdirs()
+
+    List<File> componentDescriptors = fileTree(rootDir) {
+        include 'framework/*/ofbiz-component.xml'
+        include 'applications/*/ofbiz-component.xml'
+        include 'themes/*/ofbiz-component.xml'
+        include 'plugins/*/ofbiz-component.xml'
+    }.files.sort { relativePath(it) }
+
+    List<Map<String, Object>> components = componentDescriptors.collect { File descriptor ->
+        def xml = parseXml(descriptor)
+        String componentPath = relativePath(descriptor.parentFile)
+        [
+                name             : xml?.@name?.toString() ?: descriptor.parentFile.name,
+                path             : componentPath,
+                enabled          : !(xml?.@enabled?.toString() == 'false'),
+                entityResources  : xml?.'entity-resource'?.size() ?: 0,
+                serviceResources : xml?.'service-resource'?.size() ?: 0,
+                webapps          : xml?.webapp?.collect { it.@name.toString() }.findAll { it }.sort() ?: [],
+                containers       : xml?.container?.collect { it.@name.toString() }.findAll { it }.sort() ?: []
+        ]
+    }
+
+    List<Map<String, String>> entities = []
+    List<Map<String, String>> entityEcas = []
+    List<Map<String, String>> services = []
+    List<Map<String, String>> serviceEcas = []
+    List<Map<String, String>> requests = []
+    List<Map<String, String>> views = []
+    List<Map<String, String>> controllerIncludes = []
+    List<Map<String, String>> permissions = []
+    List<Map<String, String>> scheduledJobs = []
+    List<Map<String, String>> testSuites = []
+    Set<String> reportFiles = new TreeSet<>()
+    Set<String> integrationReferences = new TreeSet<>()
+    List<Map<String, String>> dependencyCandidates = []
+
+    List<File> xmlFiles = []
+    ['framework', 'applications', 'themes', 'plugins'].each { String directory ->
+        xmlFiles.addAll(xmlFilesUnder(file(directory)))
+    }
+    xmlFiles = xmlFiles.unique().sort { relativePath(it) }
+
+    xmlFiles.each { File source ->
+        def xml = parseXml(source)
+        if (xml == null) {
+            return
+        }
+        String sourcePath = relativePath(source)
+        String component = componentNameFor(source, components)
+
+        xml.depthFirst().each { node ->
+            String nodeName = node.name()?.toString()
+            switch (nodeName) {
+                case 'entity':
+                case 'view-entity':
+                    String entityName = node.@'entity-name'.toString()
+                    if (entityName) {
+                        entities << [name: entityName, kind: nodeName, component: component, source: sourcePath]
+                    }
+                    break
+                case 'eca':
+                    String serviceName = node.@service.toString()
+                    String entityName = node.@'entity'.toString() ?: node.@'entity-name'.toString()
+                    if (serviceName) {
+                        serviceEcas << [service: serviceName, event: node.@event.toString(), component: component,
+                                        source: sourcePath]
+                    } else if (entityName) {
+                        entityEcas << [entity: entityName, operation: node.@operation.toString(), component: component,
+                                       source: sourcePath]
+                    }
+                    break
+                case 'service':
+                    String serviceName = node.@name.toString()
+                    if (serviceName) {
+                        services << [name: serviceName, engine: node.@engine.toString(), location: node.@location.toString(),
+                                     invoke: node.@invoke.toString(), auth: node.@'auth'.toString(),
+                                     component: component, source: sourcePath]
+                    }
+                    break
+                case 'request-map':
+                    String uri = node.@uri.toString()
+                    if (uri) {
+                        requests << [uri: uri, component: component, source: sourcePath]
+                    }
+                    break
+                case 'view-map':
+                    String viewName = node.@name.toString()
+                    if (viewName) {
+                        views << [name: viewName, type: node.@type.toString(), page: node.@page.toString(),
+                                  component: component, source: sourcePath]
+                    }
+                    break
+                case 'include':
+                    String location = node.@location.toString()
+                    if (source.name == 'controller.xml' && location) {
+                        controllerIncludes << [location: location, component: component, source: sourcePath]
+                    }
+                    break
+                case 'SecurityPermission':
+                    String permissionId = node.@permissionId.toString()
+                    if (permissionId) {
+                        permissions << [id: permissionId, component: component, source: sourcePath]
+                    }
+                    break
+                case 'JobSandbox':
+                case 'TemporalExpressionAssoc':
+                    String jobName = node.@jobName.toString() ?: node.@jobId.toString() ?: node.@toTempExprId.toString()
+                    String scheduledService = node.@serviceName.toString()
+                    if (jobName || scheduledService) {
+                        scheduledJobs << [name: jobName, service: scheduledService, component: component, source: sourcePath]
+                    }
+                    break
+                case 'test-suite':
+                    String suiteName = node.@'suite-name'.toString()
+                    if (suiteName && sourcePath.contains('/testdef/')) {
+                        testSuites << [name: suiteName, component: component, source: sourcePath]
+                    }
+                    break
+            }
+        }
+
+        if (sourcePath.toLowerCase(Locale.ROOT).contains('report')) {
+            reportFiles.add(sourcePath)
+        }
+    }
+
+    Map<String, String> serviceOwners = services.findAll { it.name }.collectEntries { [(it.name): it.component] }
+    Map<String, String> entityOwners = entities.findAll { it.name }.collectEntries { [(it.name): it.component] }
+    fileTree(rootDir) {
+        ['java', 'groovy', 'xml', 'properties', 'ftl', 'js'].each { String extension ->
+            include "framework/**/*.${extension}"
+            include "applications/**/*.${extension}"
+            include "themes/**/*.${extension}"
+        }
+        exclude '**/build/**', '**/.gradle/**', '**/node_modules/**'
+        exclude 'framework/rest-api/webapp/docs/*.js', 'framework/rest-api/webapp/docs/*.js.map'
+    }.files.sort { relativePath(it) }.each { File source ->
+        String sourcePath = relativePath(source)
+        if (sourcePath.contains('/src/test/') || sourcePath.contains('/testdef/') ||
+                sourcePath.contains('/dtd/') || sourcePath.contains('/templates/')) {
+            return
+        }
+        String sourceComponent = componentNameFor(source, components)
+        int lineNumber = 0
+        source.eachLine('UTF-8') { String line ->
+            lineNumber++
+            if (line =~ /(?i)(https?:\/\/|rmi:\/\/|jms:|smtp\.|paymentgateway|shipmentgateway)/ &&
+                    !(line =~ /(?i)(apache\.org\/licenses|ofbiz\.apache\.org\/dtds|w3\.org|xmlns)/)) {
+                integrationReferences.add(sourcePath)
+            }
+            (line =~ /component:\/\/([^\/"'\s]+)/).each { match ->
+                String target = match[1]
+                if (target && target != sourceComponent && target ==~ /[A-Za-z0-9_-]+/) {
+                    dependencyCandidates << [source: sourceComponent, target: target, kind: 'component-resource',
+                                             symbol: target, evidence: "${sourcePath}:${lineNumber}"]
+                }
+            }
+            (line =~ /(?:runSync|runSyncIgnore|runAsync|schedule|addJob)\s*\(\s*["']([^"']+)["']/).each { match ->
+                String symbol = match[1]
+                String target = serviceOwners[symbol]
+                if (target && target != sourceComponent) {
+                    dependencyCandidates << [source: sourceComponent, target: target, kind: 'service-call',
+                                             symbol: symbol, evidence: "${sourcePath}:${lineNumber}"]
+                }
+            }
+            (line =~ /(?:from|findOne|findList|makeValue|create|store)\s*\(\s*["']([A-Z][A-Za-z0-9_]+)["']/).each { match ->
+                String symbol = match[1]
+                String target = entityOwners[symbol]
+                if (target && target != sourceComponent) {
+                    dependencyCandidates << [source: sourceComponent, target: target, kind: 'entity-reference',
+                                             symbol: symbol, evidence: "${sourcePath}:${lineNumber}"]
+                }
+            }
+        }
+    }
+
+    def uniqueSorted = { List<Map<String, String>> values, List<String> keys ->
+        values.unique { Map value -> keys.collect { value[it] ?: '' }.join('\u0000') }
+                .sort { Map left, Map right ->
+                    keys.collect { left[it] ?: '' }.join('\u0000') <=>
+                            keys.collect { right[it] ?: '' }.join('\u0000')
+                }
+    }
+
+    entities = uniqueSorted(entities, ['name', 'component', 'source'])
+    entityEcas = uniqueSorted(entityEcas, ['entity', 'operation', 'component', 'source'])
+    services = uniqueSorted(services, ['name', 'component', 'source'])
+    serviceEcas = uniqueSorted(serviceEcas, ['service', 'event', 'component', 'source'])
+    requests = uniqueSorted(requests, ['uri', 'component', 'source'])
+    views = uniqueSorted(views, ['name', 'component', 'source'])
+    controllerIncludes = uniqueSorted(controllerIncludes, ['location', 'component', 'source'])
+    permissions = uniqueSorted(permissions, ['id', 'component', 'source'])
+    scheduledJobs = uniqueSorted(scheduledJobs, ['name', 'service', 'component', 'source'])
+    testSuites = uniqueSorted(testSuites, ['name', 'component', 'source'])
+    dependencyCandidates = uniqueSorted(dependencyCandidates, ['source', 'target', 'kind', 'symbol', 'evidence'])
+
+    Map<String, Object> inventory = [
+            schemaVersion        : 1,
+            evidence             : [kind: 'static-repository-analysis',
+                                    limitations: ['No production runtime traces',
+                                                  'String/reflection-based calls may not be attributable statically',
+                                                  'File-name matching identifies report/integration candidates for review']],
+            counts               : [components: components.size(), entities: entities.size(), entityEcas: entityEcas.size(),
+                                    services: services.size(), serviceEcas: serviceEcas.size(), requests: requests.size(),
+                                    views: views.size(), controllerIncludes: controllerIncludes.size(),
+                                    permissions: permissions.size(), scheduledJobs: scheduledJobs.size(),
+                                    testSuites: testSuites.size(),
+                                    reportCandidates: reportFiles.size(), integrationCandidates: integrationReferences.size(),
+                                    dependencyCandidates: dependencyCandidates.size()],
+            components           : components,
+            entities             : entities,
+            entityEcas           : entityEcas,
+            services             : services,
+            serviceEcas          : serviceEcas,
+            controllerRequests   : requests,
+            controllerViews      : views,
+            controllerIncludes   : controllerIncludes,
+            securityPermissions  : permissions,
+            scheduledJobs        : scheduledJobs,
+            testSuites           : testSuites,
+            dependencyCandidates : dependencyCandidates,
+            reportCandidates     : reportFiles as List,
+            integrationCandidates: integrationReferences as List
+    ]
+
+    new File(destination, 'ofbiz-static-inventory.json').text =
+            JsonOutput.toJson(inventory) + System.lineSeparator()
+
+    Map<String, List<Map<String, String>>> servicesByComponent = services.groupBy { it.component }
+    Map<String, List<Map<String, String>>> entitiesByComponent = entities.groupBy { it.component }
+    Map<String, List<Map<String, String>>> requestsByComponent = requests.groupBy { it.component }
+    StringBuilder summary = new StringBuilder('# Generated OFBiz static inventory summary\n\n')
+    summary << '> Generated by `./gradlew generatePhase0Inventory`. Do not edit manually.\n\n'
+    summary << 'This is static repository evidence. It must be augmented with production traces and owner review.\n\n'
+    summary << '## Totals\n\n| Item | Count |\n| --- | ---: |\n'
+    inventory.counts.each { key, value -> summary << "| ${key} | ${value} |\n" }
+    summary << '\n## Component contribution counts\n\n'
+    summary << '| Component | Path | Services | Entities/views | Controller requests | Web apps |\n| --- | --- | ---: | ---: | ---: | --- |\n'
+    components.findAll { it.enabled }.each { component ->
+        summary << "| ${component.name} | `${component.path}` | ${servicesByComponent[component.name]?.size() ?: 0} | "
+        summary << "${entitiesByComponent[component.name]?.size() ?: 0} | ${requestsByComponent[component.name]?.size() ?: 0} | "
+        summary << "${component.webapps ? component.webapps.join(', ') : '—'} |\n"
+    }
+    summary << '\n## Limitations\n\n'
+    inventory.evidence.limitations.each { summary << "- ${it}\n" }
+    new File(destination, 'ofbiz-static-inventory-summary.md').text = summary.toString()
+
+    Map<List<String>, Integer> dependencyCounts = dependencyCandidates.countBy {
+        [it.source, it.target, it.kind]
+    }
+    StringBuilder dependencies = new StringBuilder('# Generated component dependency candidates\n\n')
+    dependencies << '> Generated by `./gradlew generatePhase0Inventory`. Do not edit manually.\n\n'
+    dependencies << 'These are conservative static candidates from component URIs and literal service/entity calls. '
+    dependencies << 'They are not a complete runtime call graph and require trace validation.\n\n'
+    dependencies << '| Source | Target | Evidence kind | References |\n| --- | --- | --- | ---: |\n'
+    dependencyCounts.keySet().sort { it.join('\u0000') }.each { List<String> key ->
+        dependencies << "| ${key[0]} | ${key[1]} | ${key[2]} | ${dependencyCounts[key]} |\n"
+    }
+    new File(destination, 'ofbiz-component-dependency-candidates.md').text = dependencies.toString()
+}
+
+tasks.register('generatePhase0Inventory') {
+    group = 'Migration'
+    description = 'Generate the committed Phase 0 static OFBiz architecture inventory.'
+    inputs.files(fileTree(rootDir) {
+        include 'framework/**/*', 'applications/**/*', 'themes/**/*', 'plugins/**/*'
+        exclude '**/build/**', '**/.gradle/**', '**/node_modules/**'
+        exclude 'framework/rest-api/webapp/docs/*.js', 'framework/rest-api/webapp/docs/*.js.map'
+        exclude 'framework/rest-api/webapp/docs/*.css', 'framework/rest-api/webapp/docs/*.css.map'
+        exclude 'framework/rest-api/webapp/docs/favicon-*.png', 'framework/rest-api/webapp/docs/oauth2-redirect.html'
+    })
+    outputs.dir(phase0GeneratedDir)
+    doLast {
+        delete phase0GeneratedDir
+        generateInventory(phase0GeneratedDir)
+    }
+}
+
+tasks.register('verifyPhase0Inventory') {
+    group = 'Verification'
+    description = 'Fail when the committed Phase 0 inventory has drifted from repository metadata.'
+    inputs.files(fileTree(rootDir) {
+        include 'framework/**/*', 'applications/**/*', 'themes/**/*', 'plugins/**/*'
+        exclude '**/build/**', '**/.gradle/**', '**/node_modules/**'
+        exclude 'framework/rest-api/webapp/docs/*.js', 'framework/rest-api/webapp/docs/*.js.map'
+        exclude 'framework/rest-api/webapp/docs/*.css', 'framework/rest-api/webapp/docs/*.css.map'
+        exclude 'framework/rest-api/webapp/docs/favicon-*.png', 'framework/rest-api/webapp/docs/oauth2-redirect.html'
+    })
+    inputs.dir(phase0GeneratedDir)
+    outputs.file(file("${buildDir}/phase0-inventory-verification/verified.txt"))
+    mustRunAfter tasks.named('generatePhase0Inventory')
+    doLast {
+        File candidate = file("${buildDir}/phase0-inventory-verification")
+        delete candidate
+        generateInventory(candidate)
+        ['ofbiz-static-inventory.json', 'ofbiz-static-inventory-summary.md',
+         'ofbiz-component-dependency-candidates.md'].each { String name ->
+            File committed = new File(phase0GeneratedDir, name)
+            File generated = new File(candidate, name)
+            if (!committed.exists() || committed.getText('UTF-8') != generated.getText('UTF-8')) {
+                throw new GradleException("Phase 0 inventory is stale: ${relativePath(committed)}. " +
+                        'Run ./gradlew generatePhase0Inventory and commit the result.')
+            }
+        }
+        new File(candidate, 'verified.txt').text = 'verified' + System.lineSeparator()
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyPhase0Inventory')
+}
+
+// Node convention tasks write inside component source directories rather than build/.
+// Declare ordering (not dependencies) so Gradle can safely run inventory checks in the
+// same invocation without making the inventory task install npm dependencies itself.
+gradle.projectsEvaluated {
+    List<Task> sourceTreeWriters = [
+            project(':framework:rest-api').tasks.findByName('npmInstall'),
+            project(':framework:rest-api').tasks.findByName('copySwaggerUiAssets'),
+            project(':framework:rest-api').tasks.findByName('copyRedocAssets'),
+            project(':themes:common-theme').tasks.findByName('npmInstall')
+    ].findAll { it != null }
+    tasks.named('generatePhase0Inventory') { mustRunAfter sourceTreeWriters }
+    tasks.named('verifyPhase0Inventory') { mustRunAfter sourceTreeWriters }
+}

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="https://ofbiz.apache.org/dtds/services.xsd">
+    <description>Narrow read-only Product Catalog migration exports</description>
+    <vendor>OFBiz</vendor>
+    <version>1.0</version>
+
+    <service name="exportProductCatalogProjectionPage" engine="groovy" auth="true"
+            location="component://product/src/main/groovy/org/apache/ofbiz/product/migration/CatalogProjectionExport.groovy">
+        <description>Exports one bounded, stable page of approved Product Catalog projection fields.</description>
+        <required-permissions join-type="OR">
+            <check-permission permission="CATALOG_VIEW"/>
+            <check-permission permission="CATALOG_ADMIN"/>
+        </required-permissions>
+        <attribute name="recordType" type="String" mode="IN" optional="false"/>
+        <attribute name="cursor" type="String" mode="IN" optional="true"/>
+        <attribute name="limit" type="Integer" mode="IN" optional="true"/>
+        <attribute name="cutoff" type="String" mode="INOUT" optional="true"/>
+        <attribute name="items" type="List" mode="OUT" optional="false"/>
+        <attribute name="nextCursor" type="String" mode="OUT" optional="true"/>
+        <attribute name="hasMore" type="Boolean" mode="OUT" optional="false"/>
+    </service>
+</services>

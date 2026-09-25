@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:ofbiz:event:platform-sample:0.1.0","type":"object","required":["id","occurredAt","type"],"properties":{"id":{"type":"string","format":"uuid"},"occurredAt":{"type":"string","format":"date-time"},"type":{"const":"platform.sample.probed.v1"}},"additionalProperties":false}
