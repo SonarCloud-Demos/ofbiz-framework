@@ -69,7 +69,7 @@ Every collection response must have a deterministic order, bounded page size and
 - Current system of record and writer: OFBiz entity engine.
 - Target owner: Product Catalog service and its independently managed database/search projection.
 - Initial transfer: repeatable snapshot/backfill from an approved OFBiz export or narrow adapter contract.
-- Change capture during migration: **TBD**; prefer versioned catalog lifecycle events or an outbox over database polling.
+- Change capture during the read-only migration window uses bounded, checksum-based polling as recorded in `change-capture.md`. Writer transfer remains blocked until versioned catalog lifecycle events and an outbox/inbox path replace polling.
 - Read confidence: shadow modern reads and compare them with normalized golden-master legacy results.
 - Write transfer: outside this read-only slice. OFBiz remains the product-maintenance writer until a later explicitly chartered slice.
 - Cutover: route reads only after reconciliation and SLO gates pass; preserve route-level fallback during a time-boxed observation window.
@@ -111,7 +111,7 @@ Engineering, product, data, security/privacy and SRE owners, the primary on-call
 - [x] Initial Product Catalog fields are bounded; any later cross-context read contract still requires explicit approval.
 - [ ] Golden-master browse/search cases are committed and reproducible.
 - [ ] Baseline volume, latency and relevance measurements are recorded.
-- [ ] Backfill, change capture, reconciliation and rebuild designs are approved.
+- [x] Backfill, transitional change capture, reconciliation and rebuild designs are recorded; production-like execution evidence remains required.
 - [ ] Numeric SLO, RPO/RTO and reconciliation thresholds are approved.
 - [ ] OpenAPI service contract is committed; lint/compatibility automation and the BFF contract remain required.
 - [ ] Threat model, accessibility plan, fallback test and support runbook are approved.

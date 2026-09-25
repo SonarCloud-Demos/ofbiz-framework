@@ -28,6 +28,11 @@ tasks.register('modernWebCheck') {
         def packageMetadata = new JsonSlurper().parse(file('web/package.json'))
         assert packageMetadata.engines.node == '24.11.1'
         assert packageMetadata.packageManager == 'npm@11.6.2'
+        def shellProxy = file('web/shell/nginx.conf').text
+        ['Content-Security-Policy', 'Permissions-Policy', 'Referrer-Policy',
+         'X-Content-Type-Options', 'X-Frame-Options'].each {
+            assert shellProxy.contains("add_header ${it}"): "Shell browser security header ${it} is missing"
+        }
     }
 }
 

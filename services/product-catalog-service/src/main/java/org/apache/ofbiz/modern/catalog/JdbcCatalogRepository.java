@@ -176,7 +176,8 @@ class JdbcCatalogRepository implements CatalogRepository {
                 DELETE FROM catalog_category_product cp
                 WHERE NOT EXISTS (SELECT 1 FROM catalog_snapshot_seen seen
                     WHERE seen.run_id = :runId AND seen.record_type = 'membership'
-                      AND seen.record_id = CONCAT(cp.category_id, '|', cp.product_id, '|', cp.from_date))
+                      AND seen.record_id = CONCAT(cp.category_id, '|', cp.product_id, '|',
+                          (EXTRACT(EPOCH FROM cp.from_date) * 1000)::BIGINT))
                 """).param("runId", runId).update();
         deleted += jdbc.sql("""
                 DELETE FROM catalog_product p

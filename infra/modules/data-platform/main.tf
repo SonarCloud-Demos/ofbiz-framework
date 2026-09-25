@@ -23,6 +23,11 @@ resource "azurerm_key_vault" "this" {
   purge_protection_enabled      = true
   public_network_access_enabled = false
   tags                          = var.tags
+
+  network_acls {
+    bypass         = "None"
+    default_action = "Deny"
+  }
 }
 resource "azurerm_storage_account" "app" {
   name                          = substr(replace("${var.name}data", "-", ""), 0, 24)

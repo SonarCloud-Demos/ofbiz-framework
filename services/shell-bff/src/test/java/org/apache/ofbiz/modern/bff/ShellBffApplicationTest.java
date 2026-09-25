@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.time.Instant;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.net.URI;
 import org.junit.jupiter.api.Test;
 
@@ -58,5 +59,14 @@ class ShellBffApplicationTest {
         assertEquals(null, ShellBffApplication.catalogUri(base, URI.create("/bff/catalog/admin")));
         assertEquals(null, ShellBffApplication.catalogUri(base, URI.create("/bff/catalog/search?q=x&unknown=y")));
         assertEquals(null, ShellBffApplication.catalogUri(base, URI.create("/bff/catalog/search?q=x&limit=1000")));
+    }
+
+    @Test void searchRateLimitResetsAfterOneMinute() {
+        var windows = new ConcurrentHashMap<String, ShellBffApplication.RateWindow>();
+        var start = Instant.parse("2026-09-25T10:00:00Z");
+        assertTrue(ShellBffApplication.rateLimitAllows(windows, "subject", start, 2));
+        assertTrue(ShellBffApplication.rateLimitAllows(windows, "subject", start.plusSeconds(1), 2));
+        assertFalse(ShellBffApplication.rateLimitAllows(windows, "subject", start.plusSeconds(2), 2));
+        assertTrue(ShellBffApplication.rateLimitAllows(windows, "subject", start.plusSeconds(60), 2));
     }
 }

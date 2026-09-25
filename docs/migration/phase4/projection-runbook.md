@@ -28,6 +28,8 @@ Status: repository implementation baseline on 2026-09-24. The narrow OFBiz expor
 
 Batch replay is safe. Snapshot completion is single-use because the reconciliation record uses the run ID as its primary key. If completion fails before commit, retry it. If the source snapshot was inconsistent or its count cannot be proven, abandon the run ID and begin a new snapshot; never lower the declared count merely to make reconciliation pass.
 
+Membership reconciliation keys use `categoryId|productId|fromDateEpochMillis` on both ingestion and PostgreSQL comparison. Do not change this canonical form without a migration and a round-trip reconciliation test; database timestamp text is not a stable cross-runtime identifier.
+
 ## Export boundary
 
 OFBiz exposes the authenticated `exportProductCatalogProjectionPage` service through `/rest/catalog-export/{recordType}`. It allows only categories, products and effective-dated memberships, carries a shared run cutoff, uses stable key cursors, caps pages at 500 and returns only approved projection fields with SHA-256 checksums. Stable cursors do not create transaction isolation across HTTP requests; source consistency must be established as described above.

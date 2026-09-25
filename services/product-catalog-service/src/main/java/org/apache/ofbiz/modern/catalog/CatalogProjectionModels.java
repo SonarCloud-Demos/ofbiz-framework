@@ -40,7 +40,7 @@ final class CatalogProjectionModels {
             @NotNull Instant fromDate,
             Instant thruDate) {
         String recordId() {
-            return categoryId + "|" + productId + "|" + fromDate;
+            return categoryId + "|" + productId + "|" + fromDate.toEpochMilli();
         }
     }
 

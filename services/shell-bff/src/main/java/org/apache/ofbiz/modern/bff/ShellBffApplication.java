@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 /** OIDC-backed same-origin browser boundary for the Phase 3 platform test route. */
@@ -35,6 +36,7 @@ public final class ShellBffApplication {
     private static final HttpClient CLIENT = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
     private static final Map<String, LoginAttempt> ATTEMPTS = new ConcurrentHashMap<>();
     private static final Map<String, Session> SESSIONS = new ConcurrentHashMap<>();
+    private static final Map<String, RateWindow> SEARCH_WINDOWS = new ConcurrentHashMap<>();
 
     private ShellBffApplication() { }
 
@@ -209,6 +211,11 @@ public final class ShellBffApplication {
         }
         URI upstream = catalogUri(config.catalog(), exchange.getRequestURI());
         if (upstream == null) { json(exchange, 400, error("invalid_catalog_request", correlation)); return; }
+        if (exchange.getRequestURI().getPath().equals("/bff/catalog/search")
+                && !rateLimitAllows(SEARCH_WINDOWS, current.subject(), Instant.now(), 30)) {
+            exchange.getResponseHeaders().set("Retry-After", "60");
+            json(exchange, 429, error("search_rate_limited", correlation)); return;
+        }
         if (!BULKHEAD.tryAcquire()) { json(exchange, 503, error("temporarily_unavailable", correlation)); return; }
         try {
             HttpResponse<String> response = CLIENT.send(HttpRequest.newBuilder(upstream).timeout(Duration.ofSeconds(3))
@@ -258,6 +265,20 @@ public final class ShellBffApplication {
         return URI.create(target.toString());
     }
 
+    static boolean rateLimitAllows(Map<String, RateWindow> windows, String subject, Instant now, int limit) {
+        AtomicBoolean allowed = new AtomicBoolean();
+        windows.compute(subject, (key, existing) -> {
+            if (existing == null || !now.isBefore(existing.resetAt())) {
+                allowed.set(true);
+                return new RateWindow(1, now.plusSeconds(60));
+            }
+            if (existing.count() >= limit) return existing;
+            allowed.set(true);
+            return new RateWindow(existing.count() + 1, existing.resetAt());
+        });
+        return allowed.get();
+    }
+
     private static boolean validRequest(HttpExchange exchange, Config config, String method) throws IOException {
         if (!trustedHost(exchange.getRequestHeaders().getFirst("Host"), config.hosts())) { json(exchange, 400, error("invalid_request", correlationId(null))); return false; }
         if (!method.equals(exchange.getRequestMethod())) { exchange.getResponseHeaders().set("Allow", method); json(exchange, 405, error("method_not_allowed", correlationId(null))); return false; }
@@ -305,4 +326,5 @@ public final class ShellBffApplication {
                   int routePercentage, boolean routeDisabled, int catalogRoutePercentage, boolean catalogRouteDisabled) { }
     record LoginAttempt(String verifier, String returnPath, Instant expires) { }
     record Session(String subject, String username, Set<String> roles, String csrf, Instant expires) { }
+    record RateWindow(int count, Instant resetAt) { }
 }
