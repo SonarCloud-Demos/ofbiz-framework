@@ -1,0 +1,172 @@
+openapi: 3.1.0
+info:
+  title: Product Catalog browse and search API
+  version: 0.1.0
+  description: Read-only Phase 4 contract. Pricing, inventory, ordering and maintenance are intentionally excluded.
+servers:
+  - url: /
+paths:
+  /api/catalog/v1/categories/{categoryId}:
+    get:
+      operationId: getCategory
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+      responses:
+        '200':
+          description: Category and immediate children
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CategoryDetail'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/catalog/v1/categories/{categoryId}/products:
+    get:
+      operationId: browseCategoryProducts
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Deterministic page of eligible product summaries
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/catalog/v1/products/{productId}/summary:
+    get:
+      operationId: getProductSummary
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Eligible product summary
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductSummary'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/catalog/v1/search:
+    get:
+      operationId: searchProducts
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 200}
+        - name: categoryId
+          in: query
+          required: false
+          schema: {$ref: '#/components/schemas/Identifier'}
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Deterministic page; an empty match is a successful response with no items
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+components:
+  parameters:
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Identifier'}
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Identifier'}
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: {type: string, minLength: 1, maxLength: 512}
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+    Sort:
+      name: sort
+      in: query
+      required: false
+      schema: {type: string, enum: [catalog, name], default: catalog}
+  responses:
+    BadRequest:
+      description: Invalid or out-of-bounds request
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    NotFound:
+      description: Resource is absent or not eligible for this catalog
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Identifier:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*$'
+    CategorySummary:
+      type: object
+      additionalProperties: false
+      required: [categoryId, name]
+      properties:
+        categoryId: {$ref: '#/components/schemas/Identifier'}
+        name: {type: string, minLength: 1, maxLength: 255}
+        description: {type: string, maxLength: 4000}
+        imageUrl: {type: string, format: uri-reference, maxLength: 2048}
+    CategoryDetail:
+      type: object
+      additionalProperties: false
+      required: [categoryId, name, children, correlationId]
+      properties:
+        categoryId: {$ref: '#/components/schemas/Identifier'}
+        name: {type: string, minLength: 1, maxLength: 255}
+        description: {type: string, maxLength: 4000}
+        imageUrl: {type: string, format: uri-reference, maxLength: 2048}
+        children:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/CategorySummary'}
+        correlationId: {type: string, minLength: 1, maxLength: 128}
+    ProductSummary:
+      type: object
+      additionalProperties: false
+      required: [productId, name, productType, virtual, variant]
+      properties:
+        productId: {$ref: '#/components/schemas/Identifier'}
+        name: {type: string, minLength: 1, maxLength: 255}
+        description: {type: string, maxLength: 4000}
+        imageUrl: {type: string, format: uri-reference, maxLength: 2048}
+        productType: {type: string, minLength: 1, maxLength: 32}
+        virtual: {type: boolean}
+        variant: {type: boolean}
+    ProductPage:
+      type: object
+      additionalProperties: false
+      required: [items, correlationId]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/ProductSummary'}
+        nextCursor: {type: string, minLength: 1, maxLength: 512}
+        correlationId: {type: string, minLength: 1, maxLength: 128}
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, correlationId]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string, minLength: 1, maxLength: 200}
+        status: {type: integer, minimum: 400, maximum: 599}
+        detail: {type: string, maxLength: 1000}
+        correlationId: {type: string, minLength: 1, maxLength: 128}

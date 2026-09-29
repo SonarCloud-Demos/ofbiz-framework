@@ -1,0 +1,85 @@
+name: Ephemeral Azure environment
+
+on:
+  pull_request:
+    types: [labeled, synchronize, closed]
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && contains(github.event.pull_request.labels.*.name, 'azure-ephemeral')
+    runs-on: ubuntu-latest
+    environment: azure-dev
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+      TF_VAR_alert_email: ${{ vars.PLATFORM_ALERT_EMAIL }}
+      TF_VAR_sample_image: ${{ vars.SAMPLE_IMAGE }}
+      TF_VAR_shell_image: ${{ vars.SHELL_IMAGE }}
+      TF_VAR_legacy_origin_host: ${{ vars.LEGACY_ORIGIN_HOST }}
+      TF_VAR_postgres_admin_login: ${{ secrets.POSTGRES_BOOTSTRAP_LOGIN }}
+      TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_BOOTSTRAP_PASSWORD }}
+      TF_VAR_pull_request_number: ${{ github.event.pull_request.number }}
+      TF_VAR_vnet_cidr: 10.40.0.0/20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with: { terraform_version: 1.13.3 }
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Set expiry
+        run: echo "TF_VAR_expires_at=$(date -u -d '+2 days' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Plan and apply
+        working-directory: infra/environments/ephemeral
+        run: |
+          terraform init -input=false -backend-config="key=ephemeral/pr-${TF_VAR_pull_request_number}/platform.tfstate" -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" -backend-config="container_name=tfstate"
+          terraform plan -input=false -out=platform.tfplan
+          terraform apply -input=false platform.tfplan
+
+  destroy-on-close:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'azure-ephemeral')
+    runs-on: ubuntu-latest
+    environment: azure-dev
+    steps:
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Remove expired environment and state
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          az group delete --name "ofbiz-pr-${PR_NUMBER}-rg" --yes --no-wait
+          az storage blob delete --auth-mode login --account-name "${{ vars.TFSTATE_STORAGE_ACCOUNT }}" --container-name tfstate --name "ephemeral/pr-${PR_NUMBER}/platform.tfstate"
+
+  ttl-cleanup:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    environment: azure-dev
+    steps:
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Remove environments after TTL
+        run: |
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          az group list --tag ephemeral=true --query "[?tags.\"expires-at\" < '$now'].name" -o tsv | while read -r group; do
+            pr=${group#ofbiz-pr-}; pr=${pr%-rg}
+            az group delete --name "$group" --yes --no-wait
+            az storage blob delete --auth-mode login --account-name "${{ vars.TFSTATE_STORAGE_ACCOUNT }}" --container-name tfstate --name "ephemeral/pr-${pr}/platform.tfstate"
+          done

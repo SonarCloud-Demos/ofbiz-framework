@@ -90,8 +90,8 @@ jobs:
     - name: Load all plugins
       run: ./pullAllPluginsSource.sh
 
-    - name: Build with Gradle
-      run: ./gradlew check javadoc -PdisableJavadocExternalLinks
+    - name: Build whole repository with Gradle
+      run: ./gradlew build javadoc -PdisableJavadocExternalLinks
 
 # Below does not work, see see https://lists.apache.org/thread/80wzf4kclfk5nh2fss56jd6otf7y4n2f
 # BuildBot does it anyway

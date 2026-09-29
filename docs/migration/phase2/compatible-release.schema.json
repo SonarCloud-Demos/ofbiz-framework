@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OFBiz compatible modern release",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["environment", "repositoryRevision", "images"],
+  "properties": {
+    "environment": { "type": "string", "pattern": "^(dev|staging)$" },
+    "repositoryRevision": { "type": "string", "minLength": 7 },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platformSample", "webShell"],
+      "properties": {
+        "platformSample": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "webShell": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

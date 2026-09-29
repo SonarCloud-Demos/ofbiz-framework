@@ -1,0 +1,35 @@
+[
+  {
+    "path": "/modern/catalog",
+    "experience": "candidate",
+    "owner": "product-catalog",
+    "roles": ["development-user"],
+    "bff": "/bff/catalog",
+    "apiContracts": ["contracts/openapi/product-catalog.yaml"],
+    "featureFlag": "catalog-route",
+    "fallback": "/auth/legacy",
+    "e2eTest": "local-dev/smoke-test.sh"
+  },
+  {
+    "path": "/modern/platform",
+    "experience": "modern",
+    "owner": "modern-platform",
+    "roles": ["development-user"],
+    "bff": "/bff/platform",
+    "apiContracts": ["contracts/openapi/platform-sample.yaml"],
+    "featureFlag": "platform-test-route",
+    "fallback": "/auth/legacy",
+    "e2eTest": "local-dev/smoke-test.sh",
+    "marker": {"label": "Modern experience", "dataExperience": "modern"}
+  },
+  {
+    "path": "/legacy",
+    "experience": "legacy",
+    "owner": "ofbiz-platform",
+    "roles": ["development-user"],
+    "bff": null,
+    "featureFlag": "legacy-fallback",
+    "fallback": "/webtools/control/main",
+    "e2eTest": "local-dev/smoke-test.sh"
+  }
+]

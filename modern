@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+root_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+compose_file="$root_dir/local-dev/compose.yaml"
+command="${1:-help}"
+shift || true
+
+case "$command" in
+  bootstrap)
+    command -v java >/dev/null && command -v docker >/dev/null && command -v curl >/dev/null
+    docker compose version >/dev/null
+    "$root_dir/gradlew" --version >/dev/null
+    echo 'Prerequisites ready: JDK, Gradle, Docker Compose, and curl.'
+    ;;
+  build)
+    exec "$root_dir/gradlew" build "$@"
+    ;;
+  test)
+    exec "$root_dir/gradlew" check "$@"
+    ;;
+  up)
+    "$root_dir/gradlew" :services:platform-sample:containerJar :services:shell-bff:containerJar :services:identity-access:containerJar :services:ofbiz-adapter:containerJar :services:product-catalog-service:bootJar modernWebCheck
+    docker compose -f "$compose_file" up --build --detach --wait "$@"
+    echo 'OFBiz hybrid environment: http://localhost:8080/modern/catalog'
+    ;;
+  down)
+    exec docker compose -f "$compose_file" down "$@"
+    ;;
+  logs)
+    exec docker compose -f "$compose_file" logs --follow "$@"
+    ;;
+  smoke)
+    exec "$root_dir/local-dev/smoke-test.sh" "$@"
+    ;;
+  fallback-drill)
+    exec "$root_dir/local-dev/fallback-drill.sh" "$@"
+    ;;
+  help|-h|--help)
+    echo 'Usage: ./modern {bootstrap|build|test|up|down|logs|smoke|fallback-drill}'
+    ;;
+  *) echo "Unknown command: $command" >&2; exit 2 ;;
+esac

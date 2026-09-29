@@ -1,0 +1,64 @@
+{
+  "fixtureVersion": 1,
+  "evidence": {
+    "kind": "committed-demo-data",
+    "source": "applications/datamodel/data/demo/OrderDemoData.xml",
+    "productionEvidence": false
+  },
+  "categories": [
+    {
+      "categoryId": "CATALOG1",
+      "name": "Demo Browse Root",
+      "description": "Demo Catalog Primary Browse Root Category",
+      "childCategoryIds": ["100", "200"]
+    }
+  ],
+  "products": [
+    {
+      "productId": "GZ-1000",
+      "name": "Tiny Gizmo",
+      "description": "The smallest gizmo in town.",
+      "productType": "FINISHED_GOOD",
+      "virtual": false,
+      "variant": false
+    }
+  ],
+  "browseCases": [
+    {
+      "categoryId": "100",
+      "sort": "catalog",
+      "expectedProductIds": [
+        "GZ-DIG", "GZ-NEWS-1MO", "GZ-BASKET", "GZ-BASKET-PICK", "GZ-1000",
+        "GZ-1001", "GZ-1004", "GZ-1005", "GZ-1006", "GZ-2002", "GZ-2644",
+        "GZ-5005", "GZ-7000", "GZ-8544", "GZ-9290"
+      ]
+    }
+  ],
+  "searchCases": [
+    {
+      "query": "tiny",
+      "sort": "name",
+      "expectedProductIds": ["WG-5569", "GZ-1000"]
+    },
+    {
+      "query": "open standards",
+      "sort": "name",
+      "expectedProductIds": ["GZ-1006", "GZ-1006-5", "GZ-1006-3", "GZ-1006-2", "GZ-1006-1", "GZ-1006-4"]
+    },
+    {
+      "query": "gizmo",
+      "sort": "name",
+      "expectedProductIds": [
+        "GZ-1005", "GZ-8544", "GZ-DIG", "GZ-BASKET", "GZ-BASKET-PICK",
+        "GZ-NEWS-1MO", "GZ-9290", "GZ-7000", "GZ-1001", "GZ-1006",
+        "GZ-1006-5", "GZ-1006-3", "GZ-1006-2", "GZ-1006-1", "GZ-1006-4",
+        "GZ-5005", "GZ-1004", "GZ-2644", "GZ-2002", "GZ-1000"
+      ]
+    },
+    {
+      "query": "no-such-demo-product",
+      "sort": "name",
+      "expectedProductIds": []
+    }
+  ]
+}

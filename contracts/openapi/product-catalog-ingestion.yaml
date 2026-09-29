@@ -1,0 +1,103 @@
+openapi: 3.1.0
+info:
+  title: Product Catalog projection ingestion API
+  version: 0.1.0
+  description: Internal migration-only API; never expose at the public edge.
+paths:
+  /internal/catalog/projection/batches:
+    post:
+      operationId: ingestCatalogProjectionBatch
+      security: [{ingestionKey: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProjectionBatch'}
+      responses:
+        '200': {description: Batch applied and checkpoint advanced atomically}
+        '400': {description: Invalid batch}
+        '401': {description: Invalid ingestion key}
+  /internal/catalog/projection/snapshots/{runId}/complete:
+    post:
+      operationId: completeCatalogSnapshot
+      security: [{ingestionKey: []}]
+      parameters:
+        - {name: runId, in: path, required: true, schema: {$ref: '#/components/schemas/Identifier'}}
+        - {name: source, in: query, required: true, schema: {$ref: '#/components/schemas/Identifier'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sourceCount]
+              properties:
+                sourceCount: {type: integer, format: int64, minimum: 0}
+      responses:
+        '200': {description: Complete snapshot reconciled and stale projection rows removed}
+        '401': {description: Invalid ingestion key}
+        '409': {description: Received record count does not equal declared source count; nothing deleted}
+components:
+  securitySchemes:
+    ingestionKey:
+      type: apiKey
+      in: header
+      name: X-Catalog-Ingestion-Key
+  schemas:
+    Identifier:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*$'
+    CategoryRecord:
+      type: object
+      additionalProperties: false
+      required: [categoryId, name, sourceChecksum]
+      properties:
+        categoryId: {$ref: '#/components/schemas/Identifier'}
+        parentCategoryId: {$ref: '#/components/schemas/Identifier'}
+        name: {type: string, minLength: 1, maxLength: 255}
+        description: {type: string, maxLength: 4000}
+        imageUrl: {type: string, maxLength: 2048}
+        sequenceNum: {type: number}
+        fromDate: {type: string, format: date-time}
+        thruDate: {type: string, format: date-time}
+        sourceChecksum: {$ref: '#/components/schemas/Checksum'}
+    ProductRecord:
+      type: object
+      additionalProperties: false
+      required: [productId, name, productType, virtual, variant, sourceChecksum]
+      properties:
+        productId: {$ref: '#/components/schemas/Identifier'}
+        name: {type: string, minLength: 1, maxLength: 255}
+        description: {type: string, maxLength: 4000}
+        imageUrl: {type: string, maxLength: 2048}
+        productType: {type: string, minLength: 1, maxLength: 32}
+        virtual: {type: boolean}
+        variant: {type: boolean}
+        sourceChecksum: {$ref: '#/components/schemas/Checksum'}
+    MembershipRecord:
+      type: object
+      additionalProperties: false
+      required: [categoryId, productId, fromDate]
+      properties:
+        categoryId: {$ref: '#/components/schemas/Identifier'}
+        productId: {$ref: '#/components/schemas/Identifier'}
+        sequenceNum: {type: number}
+        fromDate: {type: string, format: date-time}
+        thruDate: {type: string, format: date-time}
+    ProjectionBatch:
+      type: object
+      additionalProperties: false
+      required: [source, cursor]
+      properties:
+        source: {$ref: '#/components/schemas/Identifier'}
+        cursor: {type: string, minLength: 1, maxLength: 512}
+        snapshotRunId: {$ref: '#/components/schemas/Identifier'}
+        categories: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/CategoryRecord'}}
+        products: {type: array, maxItems: 500, items: {$ref: '#/components/schemas/ProductRecord'}}
+        memberships: {type: array, maxItems: 1000, items: {$ref: '#/components/schemas/MembershipRecord'}}
+    Checksum:
+      type: string
+      pattern: '^[a-fA-F0-9]{64}$'
