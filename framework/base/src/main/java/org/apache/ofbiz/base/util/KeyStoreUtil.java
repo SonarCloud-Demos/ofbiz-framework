@@ -118,7 +118,7 @@ public final class KeyStoreUtil {
                 ks.load(in, password.toCharArray());
             }
         } else {
-            ks.load(null, "changeit".toCharArray());
+            ks.load(null, null);
         }
         return ks;
     }
