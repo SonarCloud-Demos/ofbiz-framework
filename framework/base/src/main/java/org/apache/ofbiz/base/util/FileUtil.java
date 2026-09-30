@@ -430,6 +430,8 @@ public final class FileUtil {
             folder.mkdir();
         }
 
+        String destDirPath = folder.getCanonicalPath() + File.separator;
+
         // get the Zip file content
         try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipFile))) {
             // get the zipped file list entry
@@ -446,14 +448,17 @@ public final class FileUtil {
                 } else {
                     newFile = new File(outputFolder, ze.getName());
                 }
-                //create all non existing folders
-                //else you will hit FileNotFoundException for compressed folder
-                new File(newFile.getParent()).mkdirs();
+                // skip any entry that would be written outside of the target dir
+                if (newFile.getCanonicalPath().startsWith(destDirPath)) {
+                    //create all non existing folders
+                    //else you will hit FileNotFoundException for compressed folder
+                    new File(newFile.getParent()).mkdirs();
 
-                try (FileOutputStream fos = new FileOutputStream(newFile)) {
-                    int len;
-                    while ((len = zis.read(buffer)) > 0) {
-                        fos.write(buffer, 0, len);
+                    try (FileOutputStream fos = new FileOutputStream(newFile)) {
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            fos.write(buffer, 0, len);
+                        }
                     }
                 }
                 ze = zis.getNextEntry();
